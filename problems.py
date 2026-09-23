@@ -119,6 +119,132 @@ PROBLEMS: List[Dict] = [
         "difficulty": "easy",
         "tags": ["strings", "two_pointers"],
     },
+    {
+        "id": "count_vowels",
+        "description": (
+            "Write a function `count_vowels(s)` that counts the number of vowels "
+            "(a, e, i, o, u) in a string, case-insensitively.\n\n"
+            "Examples:\n"
+            "  count_vowels('hello') → 2\n"
+            "  count_vowels('rhythm') → 0\n"
+            "  count_vowels('AEIOU') → 5"
+        ),
+        "test_code": (
+            "assert count_vowels('hello') == 2\n"
+            "assert count_vowels('rhythm') == 0\n"
+            "assert count_vowels('AEIOU') == 5\n"
+            "assert count_vowels('') == 0\n"
+            "assert count_vowels('aEiOu') == 5\n"
+            "print('All tests passed!')"
+        ),
+        "difficulty": "easy",
+        "tags": ["strings", "counting"],
+    },
+    {
+        "id": "max_of_three",
+        "description": (
+            "Write a function `max_of_three(a, b, c)` that returns the maximum "
+            "of three numbers.\n\n"
+            "Examples:\n"
+            "  max_of_three(1, 2, 3) → 3\n"
+            "  max_of_three(3, 2, 1) → 3\n"
+            "  max_of_three(-1, -2, -3) → -1"
+        ),
+        "test_code": (
+            "assert max_of_three(1, 2, 3) == 3\n"
+            "assert max_of_three(3, 2, 1) == 3\n"
+            "assert max_of_three(-1, -2, -3) == -1\n"
+            "assert max_of_three(5, 5, 5) == 5\n"
+            "assert max_of_three(0, -1, 1) == 1\n"
+            "print('All tests passed!')"
+        ),
+        "difficulty": "easy",
+        "tags": ["arithmetic", "logic"],
+    },
+    {
+        "id": "is_even",
+        "description": (
+            "Write a function `is_even(n)` that returns True if a number is even, "
+            "and False otherwise.\n\n"
+            "Examples:\n"
+            "  is_even(2) → True\n"
+            "  is_even(3) → False\n"
+            "  is_even(0) → True"
+        ),
+        "test_code": (
+            "assert is_even(2) == True\n"
+            "assert is_even(3) == False\n"
+            "assert is_even(0) == True\n"
+            "assert is_even(-4) == True\n"
+            "assert is_even(-7) == False\n"
+            "print('All tests passed!')"
+        ),
+        "difficulty": "easy",
+        "tags": ["arithmetic", "logic"],
+    },
+    {
+        "id": "sum_list",
+        "description": (
+            "Write a function `sum_list(nums)` that returns the sum of all elements "
+            "in a list.\n\n"
+            "Examples:\n"
+            "  sum_list([1, 2, 3]) → 6\n"
+            "  sum_list([]) → 0\n"
+            "  sum_list([10]) → 10"
+        ),
+        "test_code": (
+            "assert sum_list([1, 2, 3]) == 6\n"
+            "assert sum_list([]) == 0\n"
+            "assert sum_list([10]) == 10\n"
+            "assert sum_list([-1, 1]) == 0\n"
+            "assert sum_list([1.5, 2.5]) == 4.0\n"
+            "print('All tests passed!')"
+        ),
+        "difficulty": "easy",
+        "tags": ["lists", "arithmetic"],
+    },
+    {
+        "id": "remove_duplicates",
+        "description": (
+            "Write a function `remove_duplicates(lst)` that removes duplicate "
+            "elements from a list while preserving their original order.\n\n"
+            "Examples:\n"
+            "  remove_duplicates([1, 2, 2, 3, 3, 3]) → [1, 2, 3]\n"
+            "  remove_duplicates([]) → []\n"
+            "  remove_duplicates([3, 1, 2, 1, 3]) → [3, 1, 2]"
+        ),
+        "test_code": (
+            "assert remove_duplicates([1, 2, 2, 3, 3, 3]) == [1, 2, 3]\n"
+            "assert remove_duplicates([]) == []\n"
+            "assert remove_duplicates([1, 1, 1]) == [1]\n"
+            "assert remove_duplicates([1, 2, 3]) == [1, 2, 3]\n"
+            "assert remove_duplicates([3, 1, 2, 1, 3]) == [3, 1, 2]\n"
+            "print('All tests passed!')"
+        ),
+        "difficulty": "easy",
+        "tags": ["lists"],
+    },
+    {
+        "id": "count_words",
+        "description": (
+            "Write a function `count_words(sentence)` that returns the number of "
+            "words in a sentence (words separated by whitespace).\n\n"
+            "Examples:\n"
+            "  count_words('hello world') → 2\n"
+            "  count_words('') → 0\n"
+            "  count_words('  spaces  ') → 1"
+        ),
+        "test_code": (
+            "assert count_words('hello world') == 2\n"
+            "assert count_words('') == 0\n"
+            "assert count_words('one') == 1\n"
+            "assert count_words('  spaces  ') == 1\n"
+            "assert count_words('a b c d') == 4\n"
+            "print('All tests passed!')"
+        ),
+        "difficulty": "easy",
+        "tags": ["strings"],
+    },
     # ──────────────────────────────────────────────────────────────
     # MEDIUM: Core algorithmic reasoning
     # ──────────────────────────────────────────────────────────────

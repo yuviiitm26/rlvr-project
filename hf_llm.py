@@ -22,7 +22,7 @@ class HuggingFaceLLM:
         model: PreTrainedModel, 
         tokenizer: PreTrainedTokenizer,
         max_new_tokens: int = 512,
-        temperature: float = 0.7,
+        temperature: float = 0.9,
         top_p: float = 0.95
     ):
         self.model = model
@@ -60,9 +60,12 @@ class HuggingFaceLLM:
         ).to(self.model.device)
         
         # Generate completion
+        # NOTE: We explicitly set max_length=None to suppress the Unsloth
+        # warning about max_length conflicting with max_new_tokens.
         outputs = self.model.generate(
             **inputs,
             max_new_tokens=self.max_new_tokens,
+            max_length=None,
             temperature=self.temperature,
             top_p=self.top_p,
             do_sample=True,

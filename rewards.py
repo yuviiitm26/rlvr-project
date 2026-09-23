@@ -97,6 +97,35 @@ def discounted_reward(passed: bool, turn: int, gamma: float = 0.9) -> float:
     return gamma ** (turn - 1)
 
 
+def dense_pass_ratio_reward(passed_tests: int, total_tests: int) -> float:
+    """
+    Dense reward signal based on fraction of passing tests.
+
+    Instead of binary {0, 1}, returns k/N where k = number of passing
+    assertions and N = total assertions. This helps the 0.5B model learn
+    from partial successes during early training.
+
+    Examples:
+      5/5 tests pass → reward = 1.0  (full credit)
+      3/5 tests pass → reward = 0.6  (partial credit)
+      0/5 tests pass → reward = 0.0  (no credit)
+
+    When to use: Early curriculum stages where the model frequently gets
+    some assertions right but not all. The dense signal provides a
+    smoother gradient than binary pass/fail.
+
+    Args:
+        passed_tests: Number of assertions that passed.
+        total_tests:  Total number of assertions.
+
+    Returns:
+        Reward ∈ [0.0, 1.0].
+    """
+    if total_tests <= 0:
+        return 0.0
+    return min(passed_tests / total_tests, 1.0)
+
+
 def format_compliance_reward(response: str) -> float:
     """
     Reward for proper response formatting.
