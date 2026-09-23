@@ -214,6 +214,9 @@ class PythonJailGrader:
             # Layer 6: Cap file write size (prevents disk exhaustion)
             resource.setrlimit(resource.RLIMIT_FSIZE, (max_fsize, max_fsize))
 
+            # Layer 7: Prevent fork bombs by disallowing new processes
+            resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
+
         return _set_limits
 
     # ────────────────────────────────────────────────────────────────
