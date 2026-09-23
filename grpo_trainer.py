@@ -105,7 +105,9 @@ class GRPOTrainer:
             labels[:, :prompt_len] = -100
 
             # Forward pass to get current log probabilities
-            outputs = self.model(input_ids=input_ids, labels=labels)
+            # We don't pass labels here because we compute our own policy loss.
+            # Passing labels sometimes causes Unsloth/Transformers to drop logits (returns None) to save memory.
+            outputs = self.model(input_ids=input_ids, return_dict=True)
             
             # Extract logits for the response tokens
             logits = outputs.logits[:, :-1, :]  # shift right
