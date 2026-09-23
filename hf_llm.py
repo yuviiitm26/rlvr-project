@@ -5,6 +5,7 @@ Integrates Unsloth-optimized open-source models (like Qwen2.5) with our
 Multi-Turn MDP. Implements the LLMInterface protocol.
 """
 
+import threading
 import torch
 from typing import List, Dict
 from transformers import PreTrainedModel, PreTrainedTokenizer
@@ -30,6 +31,7 @@ class HuggingFaceLLM:
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.top_p = top_p
+        self.gen_lock = threading.Lock()
         
         # Ensure we're in inference mode for MDP generation
         self.model.eval()
@@ -59,20 +61,19 @@ class HuggingFaceLLM:
             max_length=2048
         ).to(self.model.device)
         
-        # Generate completion
-        # NOTE: We explicitly set max_length=None to suppress the Unsloth
-        # warning about max_length conflicting with max_new_tokens.
-        outputs = self.model.generate(
-            **inputs,
-            max_new_tokens=self.max_new_tokens,
-            max_length=None,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            do_sample=True,
-            pad_token_id=self.tokenizer.pad_token_id,
-            eos_token_id=self.tokenizer.eos_token_id,
-            use_cache=True  # Important for fast inference during RL
-        )
+        # Generate completion (locked for thread safety with Accelerate hooks)
+        with self.gen_lock:
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=self.max_new_tokens,
+                max_length=None,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                do_sample=True,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id,
+                use_cache=True  # Important for fast inference during RL
+            )
         
         # Extract only the newly generated tokens
         input_length = inputs.input_ids.shape[1]
