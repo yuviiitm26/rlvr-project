@@ -38,7 +38,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol
 
-from grader import ExecutionResult, SubprocessGrader
+from sandbox_grader import ExecutionResult, PythonJailGrader
 from rewards import (
     RewardConfig,
     binary_reward,
@@ -176,14 +176,14 @@ class MultiTurnMDP:
 
     def __init__(
         self,
-        grader: SubprocessGrader,
+        grader: PythonJailGrader,
         llm: LLMInterface,
         max_turns: int = 4,
         reward_config: Optional[RewardConfig] = None,
     ):
         """
         Args:
-            grader:        SubprocessGrader instance for code execution.
+            grader:        PythonJailGrader instance for code execution.
             llm:           Any object implementing LLMInterface.generate().
             max_turns:     Maximum attempts before episode terminates.
             reward_config: Reward computation configuration.

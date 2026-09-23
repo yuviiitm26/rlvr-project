@@ -11,7 +11,7 @@ import os
 import torch
 from unsloth import FastLanguageModel
 
-from grader import SubprocessGrader
+from sandbox_grader import PythonJailGrader
 from mdp import MultiTurnMDP
 from hf_llm import HuggingFaceLLM
 from problems import PROBLEMS
@@ -73,7 +73,7 @@ def main():
     # Assuming Kaggle environment; use_sandbox=True enforces the jail.
     # On Windows local dev, change to False.
     use_sandbox = os.path.exists("/tmp") 
-    grader = SubprocessGrader(use_sandbox=use_sandbox)
+    grader = PythonJailGrader(use_sandbox=use_sandbox)
     
     llm = HuggingFaceLLM(
         model=model, 

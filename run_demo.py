@@ -33,7 +33,7 @@ from typing import List
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from grader import SubprocessGrader
+from sandbox_grader import PythonJailGrader
 from mdp import MultiTurnMDP, Trajectory
 from fake_llm import FakeLLM
 from problems import PROBLEMS, get_problem, get_problem_stats
@@ -46,11 +46,11 @@ from rewards import (
 
 
 # ════════════════════════════════════════════════════════════════════
-# Helper Functions
+# Integration Tests
 # ════════════════════════════════════════════════════════════════════
 
 def run_single_episode(
-    grader: SubprocessGrader,
+    grader: PythonJailGrader,
     problem: dict,
     strategy: str,
     max_turns: int = 4,
@@ -68,7 +68,7 @@ def run_single_episode(
 
 
 def run_grpo_group(
-    grader: SubprocessGrader,
+    grader: PythonJailGrader,
     problem: dict,
     strategies: List[str],
     max_turns: int = 4,
@@ -108,7 +108,7 @@ def run_grpo_group(
 # Test Suites
 # ════════════════════════════════════════════════════════════════════
 
-def test_individual_strategies(grader: SubprocessGrader) -> bool:
+def test_individual_strategies(grader: PythonJailGrader) -> bool:
     """TEST 1: Run each strategy on add_two_numbers."""
     print("─" * 70)
     print("TEST 1: Individual Strategies on 'add_two_numbers'")
@@ -152,7 +152,7 @@ def test_individual_strategies(grader: SubprocessGrader) -> bool:
     return all_passed
 
 
-def test_grpo_advantages(grader: SubprocessGrader) -> bool:
+def test_grpo_advantages(grader: PythonJailGrader) -> bool:
     """TEST 2: GRPO group advantage computation."""
     print(f"\n{'─' * 70}")
     print("TEST 2: GRPO Group Advantage Computation")
@@ -188,7 +188,7 @@ def test_grpo_advantages(grader: SubprocessGrader) -> bool:
     return True
 
 
-def test_multi_problem_sweep(grader: SubprocessGrader) -> bool:
+def test_multi_problem_sweep(grader: PythonJailGrader) -> bool:
     """TEST 3: Run immediate_correct on multiple problems."""
     print(f"\n{'─' * 70}")
     print("TEST 3: Multi-Problem Sweep (immediate_correct)")
@@ -219,7 +219,7 @@ def test_multi_problem_sweep(grader: SubprocessGrader) -> bool:
     return all_passed
 
 
-def test_dapo_detection(grader: SubprocessGrader) -> bool:
+def test_dapo_detection(grader: PythonJailGrader) -> bool:
     """TEST 4: DAPO zero-variance batch detection."""
     print(f"\n{'─' * 70}")
     print("TEST 4: DAPO Zero-Variance Batch Detection")
@@ -389,12 +389,10 @@ def main():
     print(f"  Timeout:   {args.timeout}s")
     print(f"  Python:    {sys.executable}\n")
 
-    # Initialize grader
-    grader = SubprocessGrader(
-        workspace_dir=args.workspace,
-        timeout_seconds=args.timeout,
+    grader = PythonJailGrader(
+        workspace=args.workspace,
+        timeout=float(args.timeout),
         use_sandbox=not args.no_sandbox,
-        python_executable=sys.executable,  # Use the same Python that's running us
     )
 
     # Run all test suites
