@@ -88,8 +88,8 @@ def main():
             f"Problem: {problem['description']}"
         )
         
-        # Hack mdp internally for this rollout to use our enforced prompt
-        problem_dict = {"description": problem_prompt, "test_code": problem["test_code"]}
+        # Pass problem with enforced prompt and preserve id
+        problem_dict = {"id": problem["id"], "description": problem_prompt, "test_code": problem["test_code"]}
         
         trajectories = []
         model.eval()
