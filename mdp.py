@@ -344,14 +344,10 @@ class MultiTurnMDP:
           1. ```python ... ``` blocks (strongest signal)
           2. ``` ... ``` generic code blocks
           3. Raw text with <think> tags stripped (fallback)
-
-        Why we use the LAST code block: models often include
-        reasoning with partial code, followed by the final solution.
-        The last block is most likely to be complete.
         """
         # Priority 1: Explicit Python code blocks
         pattern = r"```python\s*\n(.*?)```"
-        matches = re.findall(pattern, response, re.DOTALL)
+        matches = re.findall(pattern, response, re.DOTALL | re.IGNORECASE)
         if matches:
             return matches[-1].strip()
 
@@ -362,9 +358,8 @@ class MultiTurnMDP:
             return matches[-1].strip()
 
         # Priority 3: Strip think tags, use raw text
-        # This is a degraded path — format compliance reward will be low
-        code = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
-        return code.strip()
+        think_stripped = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+        return think_stripped.strip()
 
     # ────────────────────────────────────────────────────────────────
     # Internal: Reward Computation
