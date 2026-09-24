@@ -85,106 +85,114 @@ def main():
         )
         
     grader = PythonJailGrader(use_sandbox=True)
-    llm = HuggingFaceLLM(model=model, tokenizer=tokenizer, temperature=0.9)
-    mdp = MultiTurnMDP(grader=grader, llm=llm, max_turns=3, reward_config=RewardConfig(discount_gamma=0.9))
-    trainer = GRPOTrainer(model=model, tokenizer=tokenizer, group_size=4)
+    llm = HuggingFaceLLM(model=model, tokenizer=tokenizer, temperature=0.7, max_new_tokens=768)
+    mdp = MultiTurnMDP(grader=grader, llm=llm, max_turns=3, reward_config=RewardConfig(discount_gamma=0.9, format_reward_weight=0.5))
+    trainer = GRPOTrainer(model=model, tokenizer=tokenizer, group_size=4, lr=5e-5)
     
     # Custom GRPO Loop handling Multi-Turn Masking directly
-    for step, problem in enumerate(train_problems):
-        print(f"\n--- Train Step {step+1} | MBPP ID: {problem['id']} ---")
+    EPOCHS = 3
+    global_step = 0
+    for epoch in range(EPOCHS):
+        print(f"\n{'='*40}")
+        print(f"🚀 STARTING EPOCH {epoch+1}/{EPOCHS}")
+        print(f"{'='*40}\n")
         
-        # Enforce Prompt Scratchpad
-        problem_prompt = (
-            "You are an expert Python programmer. \n"
-            "You must first analyze the problem step-by-step inside <think> tags. \n"
-            "Then, output your final working code inside a ```python ``` block.\n"
-            f"Problem: {problem['description']}"
-        )
-        
-        # Pass problem with enforced prompt and preserve id
-        problem_dict = {"id": problem["id"], "description": problem_prompt, "test_code": problem["test_code"]}
-        
-        trajectories = []
-        model.eval()
-        for g in range(trainer.group_size):
-            traj = mdp.run_episode(problem_dict)
-            trajectories.append(traj)
-            status = "SOLVED" if traj.solved else "FAILED"
-            print(f"  Rollout {g+1}: {traj.num_turns} turns | Reward: {traj.final_reward:.2f} | {status}")
+        for step, problem in enumerate(train_problems):
+            global_step += 1
+            print(f"\n--- Epoch {epoch+1} | Step {global_step} | MBPP ID: {problem['id']} ---")
             
-        rewards = [t.final_reward for t in trajectories]
-        if should_skip_batch_dapo(rewards):
-            print("  [DAPO] Zero variance, skipping update.")
-            continue
+            # Enforce Prompt Scratchpad
+            problem_prompt = (
+                "You are an expert Python programmer. \n"
+                "You must first analyze the problem step-by-step inside <think> tags. \n"
+                "Then, output your final working code inside a ```python ``` block.\n"
+                f"Problem: {problem['description']}"
+            )
             
-        advantages = compute_grpo_advantages(rewards)
-        
-        # --- Multi-Turn MURPHY Backward Pass ---
-        model.train()
-        trainer.optimizer.zero_grad()
-        
-        total_loss = 0.0
-        total_kl = 0.0
-        
-        for traj, adv in zip(trajectories, advantages):
-            if not traj.turns: continue
+            # Pass problem with enforced prompt and preserve id
+            problem_dict = {"id": problem["id"], "description": problem_prompt, "test_code": problem["test_code"]}
             
-            input_ids, labels = build_masked_trajectory(tokenizer, traj.turns)
-            input_ids = input_ids.to(model.device)
-            labels = labels.to(model.device)
-            
-            # Old logprobs (No grad)
-            with torch.no_grad():
-                old_outputs = model(input_ids=input_ids, return_dict=True)
-                old_logits = old_outputs.logits[:, :-1, :]
-                old_labels = input_ids[:, 1:]
-                old_log_probs = F.log_softmax(old_logits, dim=-1).gather(-1, old_labels.unsqueeze(-1)).squeeze(-1)
-            
-            # New logprobs (With grad via Patched Autograd)
-            with autocast(device_type="cuda", dtype=torch.float16):
-                outputs = model(input_ids=input_ids, return_dict=True)
-                logits = outputs.logits[:, :-1, :]
-                shift_labels = labels[:, 1:]
-                new_log_probs = F.log_softmax(logits, dim=-1).gather(-1, input_ids[:, 1:].unsqueeze(-1)).squeeze(-1)
+            trajectories = []
+            model.eval()
+            for g in range(trainer.group_size):
+                traj = mdp.run_episode(problem_dict)
+                trajectories.append(traj)
+                status = "SOLVED" if traj.solved else "FAILED"
+                print(f"  Rollout {g+1}: {traj.num_turns} turns | Reward: {traj.final_reward:.2f} | {status}")
                 
-            # Create Loss Mask (-100 ignored)
-            loss_mask = (shift_labels != -100).float()
+            rewards = [t.final_reward for t in trajectories]
+            if should_skip_batch_dapo(rewards):
+                print("  [DAPO] Zero variance, skipping update.")
+                continue
+                
+            advantages = compute_grpo_advantages(rewards)
             
-            if loss_mask.sum() == 0: continue
+            # --- Multi-Turn MURPHY Backward Pass ---
+            model.train()
+            trainer.optimizer.zero_grad()
             
-            # PPO
-            log_ratio = (new_log_probs - old_log_probs) * loss_mask
-            ratio = torch.exp(log_ratio)
+            total_loss = 0.0
+            total_kl = 0.0
             
-            adv_tensor = torch.tensor(adv, device=model.device, dtype=torch.float32)
-            surr1 = ratio * adv_tensor
-            surr2 = torch.clamp(ratio, 1.0 - trainer.clip_ratio, 1.0 + trainer.clip_ratio) * adv_tensor
+            for traj, adv in zip(trajectories, advantages):
+                if not traj.turns: continue
+                
+                input_ids, labels = build_masked_trajectory(tokenizer, traj.turns)
+                input_ids = input_ids.to(model.device)
+                labels = labels.to(model.device)
+                
+                # Old logprobs (No grad)
+                with torch.no_grad():
+                    old_outputs = model(input_ids=input_ids, return_dict=True)
+                    old_logits = old_outputs.logits[:, :-1, :]
+                    old_labels = input_ids[:, 1:]
+                    old_log_probs = F.log_softmax(old_logits, dim=-1).gather(-1, old_labels.unsqueeze(-1)).squeeze(-1)
+                
+                # New logprobs (With grad via Patched Autograd)
+                with autocast(device_type="cuda", dtype=torch.float16):
+                    outputs = model(input_ids=input_ids, return_dict=True)
+                    logits = outputs.logits[:, :-1, :]
+                    shift_labels = labels[:, 1:]
+                    new_log_probs = F.log_softmax(logits, dim=-1).gather(-1, input_ids[:, 1:].unsqueeze(-1)).squeeze(-1)
+                    
+                # Create Loss Mask (-100 ignored)
+                loss_mask = (shift_labels != -100).float()
+                
+                if loss_mask.sum() == 0: continue
+                
+                # PPO
+                log_ratio = (new_log_probs - old_log_probs) * loss_mask
+                ratio = torch.exp(log_ratio)
+                
+                adv_tensor = torch.tensor(adv, device=model.device, dtype=torch.float32)
+                surr1 = ratio * adv_tensor
+                surr2 = torch.clamp(ratio, 1.0 - trainer.clip_ratio, 1.0 + trainer.clip_ratio) * adv_tensor
+                
+                policy_loss = -torch.min(surr1, surr2)
+                policy_loss = (policy_loss * loss_mask).sum() / loss_mask.sum()
+                
+                kl = ((ratio - 1.0 - log_ratio) * loss_mask).sum() / loss_mask.sum()
+                
+                loss = (policy_loss + trainer.beta_kl * kl) / trainer.group_size
+                
+                # Scaled Backward
+                trainer.scaler.scale(loss).backward()
+                
+                total_loss += policy_loss.item()
+                total_kl += kl.item()
+                
+            trainer.scaler.unscale_(trainer.optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), trainer.max_grad_norm)
+            trainer.scaler.step(trainer.optimizer)
+            trainer.scaler.update()
             
-            policy_loss = -torch.min(surr1, surr2)
-            policy_loss = (policy_loss * loss_mask).sum() / loss_mask.sum()
+            print(f"  [GRPO] Loss: {total_loss/trainer.group_size:.4f} | KL: {total_kl/trainer.group_size:.4f}")
             
-            kl = ((ratio - 1.0 - log_ratio) * loss_mask).sum() / loss_mask.sum()
-            
-            loss = (policy_loss + trainer.beta_kl * kl) / trainer.group_size
-            
-            # Scaled Backward
-            trainer.scaler.scale(loss).backward()
-            
-            total_loss += policy_loss.item()
-            total_kl += kl.item()
-            
-        trainer.scaler.unscale_(trainer.optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), trainer.max_grad_norm)
-        trainer.scaler.step(trainer.optimizer)
-        trainer.scaler.update()
-        
-        print(f"  [GRPO] Loss: {total_loss/trainer.group_size:.4f} | KL: {total_kl/trainer.group_size:.4f}")
-        
-    # --- Post-Training Serialization ---
+        # --- Post-Training Serialization ---
     print("="*60)
     print("Training Complete! Saving QLoRA Adapters to ./grpo_saved_lora")
     model.save_pretrained("grpo_saved_lora")
     print("="*60)
-
+    
 if __name__ == "__main__":
     main()
