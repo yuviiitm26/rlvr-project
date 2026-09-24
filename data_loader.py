@@ -22,7 +22,7 @@ def get_mbpp_80_20() -> Tuple[List[Dict], List[Dict]]:
         
         return {
             "id": f"mbpp_{row['task_id']}",
-            "description": row["text"],
+            "description": row["prompt"],
             "test_code": test_code
         }
         
