@@ -21,7 +21,7 @@ from rewards import compute_grpo_advantages, should_skip_batch_dapo
 from data_loader import get_mbpp_80_20
 
 
-def build_masked_trajectory(tokenizer, turns):
+def build_masked_trajectory(tokenizer, turns, max_length=4096):
     """
     Constructs the multi-turn trajectory input_ids and a labels tensor.
     Tokens belonging to the User Prompt and Sandbox Tracebacks are masked with -100.
@@ -45,6 +45,10 @@ def build_masked_trajectory(tokenizer, turns):
         input_ids.extend(tokens)
         labels.extend(tokens) # LEARN FROM THIS
         
+    # Safe truncation to prevent Unsloth auto-truncation shape mismatch
+    input_ids = input_ids[:max_length]
+    labels = labels[:max_length]
+    
     return torch.tensor([input_ids]), torch.tensor([labels])
 
 
@@ -57,7 +61,7 @@ def main():
     
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name="unsloth/Qwen2.5-0.5B-Instruct-bnb-4bit",
-        max_seq_length=2048,
+        max_seq_length=4096,
         dtype=torch.float16,
         load_in_4bit=True,
     )
