@@ -56,7 +56,7 @@ def main():
     train_problems, eval_problems = get_mbpp_80_20()
     
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/Qwen2.5-0.5B-bnb-4bit",
+        model_name="unsloth/Qwen2.5-0.5B-Instruct-bnb-4bit",
         max_seq_length=2048,
         dtype=torch.float16,
         load_in_4bit=True,
