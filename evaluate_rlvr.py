@@ -45,6 +45,15 @@ def main():
     FastLanguageModel.for_inference(model)
     if tokenizer.pad_token is None: tokenizer.pad_token = tokenizer.eos_token
     
+    # Base models lack a chat_template. Inject a standard ChatML template.
+    if not hasattr(tokenizer, "chat_template") or tokenizer.chat_template is None:
+        tokenizer.chat_template = (
+            "{% for message in messages %}"
+            "{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}"
+            "{% endfor %}"
+            "{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
+        )
+    
     passed = 0
     total = len(eval_problems)
     
