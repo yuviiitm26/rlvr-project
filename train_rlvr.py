@@ -166,6 +166,12 @@ def main():
         trainer.scaler.update()
         
         print(f"  [GRPO] Loss: {total_loss/trainer.group_size:.4f} | KL: {total_kl/trainer.group_size:.4f}")
+        
+    # --- Post-Training Serialization ---
+    print("="*60)
+    print("Training Complete! Saving QLoRA Adapters to ./grpo_saved_lora")
+    model.save_pretrained("grpo_saved_lora")
+    print("="*60)
 
 if __name__ == "__main__":
     main()
