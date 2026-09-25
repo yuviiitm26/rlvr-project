@@ -239,6 +239,15 @@ class GRPOTrainer:
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
         self.scaler.step(self.optimizer)
         self.scaler.update()
+        
+        # Adaptive KL Controller
+        avg_kl = total_kl / max(valid_count, 1)
+        target_kl = 0.02
+        if avg_kl > target_kl * 1.5:
+            self.beta_kl *= 1.2
+        elif avg_kl < target_kl * 0.5:
+            self.beta_kl *= 0.8
+        self.beta_kl = max(0.001, min(self.beta_kl, 0.1))
 
         return {
             "loss": total_loss.item(),

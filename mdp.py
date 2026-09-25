@@ -242,7 +242,7 @@ class MultiTurnMDP:
 
             # ── Step 4: Compute reward ────────────────────────────
             reward = self._compute_reward(
-                exec_result.passed, turn_num, raw_response
+                exec_result, turn_num, raw_response
             )
 
             turn_elapsed = time.monotonic() - turn_start
@@ -366,7 +366,7 @@ class MultiTurnMDP:
     # ────────────────────────────────────────────────────────────────
 
     def _compute_reward(
-        self, passed: bool, turn: int, raw_response: str
+        self, exec_result: "ExecutionResult", turn: int, raw_response: str
     ) -> float:
         """
         Compute the reward for this turn using the configured strategy.
@@ -374,7 +374,7 @@ class MultiTurnMDP:
         Delegates to the rewards module based on RewardConfig settings.
         """
         return composite_reward(
-            passed=passed,
+            exec_result=exec_result,
             turn=turn,
             response=raw_response,
             config=self.reward_config,

@@ -60,7 +60,7 @@ def main():
     train_problems, eval_problems = get_mbpp_80_20()
     
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/Qwen2.5-0.5B-Instruct-bnb-4bit",
+        model_name="unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
         max_seq_length=4096,
         dtype=torch.float16,
         load_in_4bit=True,
@@ -90,7 +90,7 @@ def main():
     trainer = GRPOTrainer(model=model, tokenizer=tokenizer, group_size=4, lr=5e-5)
     
     # Custom GRPO Loop handling Multi-Turn Masking directly
-    EPOCHS = 3
+    EPOCHS = 2
     global_step = 0
     for epoch in range(EPOCHS):
         print(f"\n{'='*40}")
@@ -103,9 +103,13 @@ def main():
             
             # Enforce Prompt Scratchpad
             problem_prompt = (
-                "You are an expert Python programmer. \n"
-                "You must first analyze the problem step-by-step inside <think> tags. \n"
-                "Then, output your final working code inside a ```python ``` block.\n"
+                "You are an expert Python programmer. You must strictly follow this format:\n"
+                "<think>\n"
+                "Step-by-step reasoning goes here...\n"
+                "</think>\n"
+                "```python\n"
+                "# Final working code goes here\n"
+                "```\n\n"
                 f"Problem: {problem['description']}"
             )
             
@@ -188,9 +192,13 @@ def main():
             
             print(f"  [GRPO] Loss: {total_loss/trainer.group_size:.4f} | KL: {total_kl/trainer.group_size:.4f}")
             
-        # --- Post-Training Serialization ---
+        # --- Periodic Checkpointing ---
+        checkpoint_dir = f"grpo_checkpoint_epoch_{epoch+1}"
+        print(f"Saving checkpoint to {checkpoint_dir}...")
+        model.save_pretrained(checkpoint_dir)
+        
     print("="*60)
-    print("Training Complete! Saving QLoRA Adapters to ./grpo_saved_lora")
+    print("Training Complete! Saving final QLoRA Adapters to ./grpo_saved_lora")
     model.save_pretrained("grpo_saved_lora")
     print("="*60)
     

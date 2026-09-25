@@ -31,8 +31,8 @@ def main():
     print(f"Loading Base Qwen2.5 and applying adapters from {args.adapter_path}...")
     try:
         model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name="unsloth/Qwen2.5-0.5B-Instruct-bnb-4bit",
-            max_seq_length=2048,
+            model_name="unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
+            max_seq_length=4096,
             dtype=torch.float16,
             load_in_4bit=True,
         )
@@ -59,11 +59,14 @@ def main():
     
     # 3. Strict Zero-Shot Loop (No Self-Correction)
     for i, prob in enumerate(eval_problems):
+        tests_str = "\n".join(prob["test_list"][:2])
         prompt = (
             "You are an expert Python programmer. \n"
             "You must first analyze the problem step-by-step inside <think> tags. \n"
             "Then, output your final working code inside a ```python ``` block.\n"
-            f"Problem: {prob['description']}"
+            f"Problem: {prob['description']}\n\n"
+            "Your code must pass these example assertions (ensure your function name matches):\n"
+            f"{tests_str}"
         )
         messages = [{"role": "user", "content": prompt}]
         formatted = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)

@@ -12,9 +12,9 @@ def get_mbpp_80_20() -> Tuple[List[Dict], List[Dict]]:
     # 1. Take exactly 100 problems
     problems_subset = dataset.select(range(100))
     
-    # 2. Split 80/20
-    train_dataset = problems_subset.select(range(80))
-    eval_dataset = problems_subset.select(range(80, 100))
+    # 2. Split 30/10 for 8-hour 1.5B GPU limit
+    train_dataset = problems_subset.select(range(30))
+    eval_dataset = problems_subset.select(range(30, 40))
     
     def format_problem(row) -> Dict:
         # Combine the assertions into an executable test script
@@ -23,7 +23,8 @@ def get_mbpp_80_20() -> Tuple[List[Dict], List[Dict]]:
         return {
             "id": f"mbpp_{row['task_id']}",
             "description": row["prompt"],
-            "test_code": test_code
+            "test_code": test_code,
+            "test_list": row["test_list"]
         }
         
     train_formatted = [format_problem(row) for row in train_dataset]
