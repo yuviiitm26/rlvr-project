@@ -265,6 +265,11 @@ class MultiTurnMDP:
                 trajectory.final_reward = reward
                 break
 
+            # If this is the last turn and it didn't pass, assign the partial process reward!
+            if turn_num == self.max_turns:
+                trajectory.final_reward = reward
+                break
+
             # ── Step 7: Append feedback for next turn ─────────────
             # This is the MDP state transition: the model's failed attempt
             # and the grader's feedback become part of the new state.

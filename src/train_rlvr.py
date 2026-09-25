@@ -87,7 +87,7 @@ def main():
     grader = PythonJailGrader(use_sandbox=True)
     llm = HuggingFaceLLM(model=model, tokenizer=tokenizer, temperature=0.7, max_new_tokens=768)
     mdp = MultiTurnMDP(grader=grader, llm=llm, max_turns=3, reward_config=RewardConfig(discount_gamma=0.9, format_reward_weight=0.5))
-    trainer = GRPOTrainer(model=model, tokenizer=tokenizer, group_size=4, lr=5e-5)
+    trainer = GRPOTrainer(model=model, tokenizer=tokenizer, group_size=8, lr=5e-5)
     
     # Custom GRPO Loop handling Multi-Turn Masking directly
     EPOCHS = 2
@@ -129,7 +129,8 @@ def main():
                 print("  [DAPO] Zero variance, skipping update.")
                 continue
                 
-            advantages = compute_grpo_advantages(rewards)
+            codes = [t.turns[-1].extracted_code if t.turns else "" for t in trajectories]
+            advantages = compute_grpo_advantages(rewards, codes=codes)
             
             # --- Multi-Turn MURPHY Backward Pass ---
             model.train()
@@ -184,6 +185,11 @@ def main():
                 
                 total_loss += policy_loss.item()
                 total_kl += kl.item()
+                
+                # LONGSTRAW: Explicitly flush the massive computation graphs to prevent OOM
+                del old_outputs, old_logits, old_labels, old_log_probs
+                del outputs, logits, shift_labels, new_log_probs
+                del log_ratio, ratio, adv_tensor, surr1, surr2, policy_loss, kl, loss
                 
             trainer.scaler.unscale_(trainer.optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), trainer.max_grad_norm)

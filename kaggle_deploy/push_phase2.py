@@ -25,7 +25,7 @@ payload = {
     "modelDataSources": []
 }
 
-print("Pushing Phase 2 Notebook to Kaggle...")
+print("Pushing Phase 4 Notebook to Kaggle...")
 response = requests.post(url, headers=headers, json=payload)
 
 if response.status_code == 200:

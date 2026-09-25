@@ -176,9 +176,24 @@ def composite_reward(
     else:
         exec_reward = discounted_reward(passed, turn, config.discount_gamma)
 
-    # Partial reward for valid python syntax (code ran but failed logic)
-    if not passed and getattr(exec_result, "error_type", "None") == "AssertionError":
-        exec_reward += 0.2
+    # Process Rewards (Min-Form Credit Assignment)
+    # If the code threw a syntax error or runtime error, it failed at error_line.
+    # We give a partial process reward based on how far it got!
+    if not passed:
+        error_line = getattr(exec_result, "error_line", -1)
+        total_lines = getattr(exec_result, "total_lines", 0)
+        
+        if error_line > 0 and total_lines > 0:
+            if error_line > total_lines:
+                # The error happened inside the test code!
+                # The model's logic compiled and ran successfully, but failed the assertion.
+                exec_reward += 0.3
+            else:
+                # Code crashed mid-execution. Reward it for the lines it successfully navigated!
+                progress = error_line / total_lines
+                exec_reward += 0.1 + (0.2 * progress)
+        elif getattr(exec_result, "error_type", "None") == "Assertion_Failure":
+            exec_reward += 0.3
 
     fmt_reward = format_compliance_reward(response)
 
@@ -190,39 +205,16 @@ def composite_reward(
 # ════════════════════════════════════════════════════════════════════
 
 def compute_grpo_advantages(
-    rewards: List[float], epsilon: float = 1e-6
+    rewards: List[float], codes: List[str] = None, epsilon: float = 1e-6
 ) -> List[float]:
     """
     Compute GRPO group-relative advantages.
 
         A_i = (r_i - mean(R)) / (std(R) + ε)
 
-    For each prompt, we generate G completions and compute their rewards.
-    The advantage normalizes rewards *within this group*, centering at zero.
-
-    This means:
-      - Completions better than the group average get positive advantage
-      - Completions worse than average get negative advantage
-      - The magnitude reflects how far from the mean they are
-
-    The policy gradient then reinforces high-advantage completions
-    and suppresses low-advantage ones.
-
-    Dr. GRPO note: We do NOT divide by trajectory length here.
-    Length normalization would incentivize the model to be verbose
-    (more tokens = lower per-token loss = easier optimization).
-    Stripping it forces the model to be concise.
-
-    Args:
-        rewards:  List of rewards for G completions of the same prompt.
-        epsilon:  Small constant for numerical stability.
-
-    Returns:
-        List of normalized advantages (same length as rewards).
-
-    Example:
-        >>> compute_grpo_advantages([1.0, 0.9, 0.0])
-        [0.7833, 0.5222, -1.3056]  # First-turn solve gets highest advantage
+    If `codes` is provided, applies μ-GRPO (Inverse Frequency Scaling):
+    Advantages are divided by the frequency of identical generated code strings
+    to penalize mode collapse and frequency bias.
     """
     rewards_arr = np.array(rewards, dtype=np.float64)
     mean_r = rewards_arr.mean()
@@ -233,6 +225,16 @@ def compute_grpo_advantages(
         return [0.0] * len(rewards)
 
     advantages = ((rewards_arr - mean_r) / (std_r + epsilon)).tolist()
+
+    # μ-GRPO Inverse Frequency Scaling
+    if codes is not None and len(codes) == len(advantages):
+        freqs = {}
+        for c in codes:
+            freqs[c] = freqs.get(c, 0) + 1
+        
+        for i, c in enumerate(codes):
+            advantages[i] = advantages[i] / freqs[c]
+
     return advantages
 
 

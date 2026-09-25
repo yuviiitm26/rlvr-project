@@ -77,6 +77,8 @@ class ExecutionResult:
     formatted_feedback: str
     error_type: str = "None"
     raw_code: str = ""
+    error_line: int = -1
+    total_lines: int = 0
 
     def to_dict(self) -> dict:
         """Serialize to dict for JSON logging / trajectory storage."""
@@ -331,6 +333,33 @@ class PythonJailGrader:
             error_type=error_type,
         )
 
+        # Process Rewards (Execution Semantics Alignment)
+        total_lines = len(raw_code.strip().split("\n"))
+        error_line = -1
+        
+        if not passed and stderr:
+            # Look for the last line number in the traceback related to the temp script
+            matches = re.findall(r'File ".*?submission_[a-f0-9]+\.py", line (\d+)', stderr)
+            if matches:
+                # The traceback puts the deepest call last, but sometimes the first match is the main script execution.
+                # If there are multiple, the deepest one in the user's code is usually the best indicator of failure line.
+                # However, if it's an AssertionError in the tests, it will be the test line.
+                # For safety, we take the *first* match that is within the raw_code boundary, or just the last match overall.
+                # The header is 2 lines:
+                # 1: # -*- coding: utf-8 -*-
+                # 2: # === AI-GENERATED SOLUTION ===
+                # 3: def ...
+                header_offset = 2
+                for m in reversed(matches):
+                    lineno = int(m) - header_offset
+                    if 1 <= lineno <= total_lines:
+                        error_line = lineno
+                        break
+                
+                # If we didn't find one in the AI code, it might be in the test code
+                if error_line == -1:
+                    error_line = int(matches[-1]) - header_offset
+
         return ExecutionResult(
             stdout=stdout,
             stderr=stderr,
@@ -342,6 +371,8 @@ class PythonJailGrader:
             formatted_feedback=feedback,
             error_type=error_type,
             raw_code=raw_code,
+            error_line=error_line,
+            total_lines=total_lines,
         )
 
     # ────────────────────────────────────────────────────────────────

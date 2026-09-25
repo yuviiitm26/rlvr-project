@@ -177,7 +177,7 @@ class GRPOTrainer:
             prompt_messages, tokenize=False, add_generation_prompt=True
         )
 
-        total_loss = torch.tensor(0.0, device=self.model.device)
+        total_loss_val = 0.0
         total_kl = 0.0
         valid_count = 0
 
@@ -227,14 +227,24 @@ class GRPOTrainer:
 
             # Total loss for this trajectory
             traj_loss = policy_loss + self.beta_kl * kl
-            total_loss = total_loss + traj_loss / self.group_size
+            
+            # --- LONGSTRAW: Serialized Backward Pass ---
+            # Instead of building a massive computation graph for all trajectories
+            # in the group, we backpropagate immediately and clear the tensors.
+            scaled_traj_loss = self.scaler.scale(traj_loss / self.group_size)
+            scaled_traj_loss.backward()
+            
+            total_loss_val += (traj_loss.item() / self.group_size)
             valid_count += 1
+            
+            # Explicitly delete activation tensors to free VRAM for the next iteration
+            del new_log_probs, new_lp, old_lp, log_ratio, ratio
+            del surr1, surr2, policy_loss, kl_per_token, kl, traj_loss, scaled_traj_loss
 
         if valid_count == 0:
             return {"loss": 0.0, "skipped_dapo": 1.0, "kl": 0.0}
 
-        # 3. Backward pass with GradScaler
-        self.scaler.scale(total_loss).backward()
+        # 3. Optimizer Step (after all trajectories have accumulated gradients)
         self.scaler.unscale_(self.optimizer)
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
         self.scaler.step(self.optimizer)
@@ -250,7 +260,7 @@ class GRPOTrainer:
         self.beta_kl = max(0.001, min(self.beta_kl, 0.1))
 
         return {
-            "loss": total_loss.item(),
+            "loss": total_loss_val,
             "skipped_dapo": 0.0,
             "kl": total_kl / max(valid_count, 1),
         }

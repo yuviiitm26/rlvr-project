@@ -3,7 +3,7 @@ import base64
 
 files = [
     "sandbox_grader.py", "rewards.py", "problems.py", "mdp.py", 
-    "hf_llm.py", "grpo_trainer.py", "train.py", "train_rlvr.py",
+    "hf_llm.py", "grpo_trainer.py", "train_rlvr.py",
     "radix_cache.py", "fused_rmsnorm.py", "verify_kernel.py",
     "patch_unsloth.py", "data_loader.py"
 ]
