@@ -17,13 +17,23 @@ def main():
     print("🚀 Starting RLVR Evaluation")
     print("="*60)
 
-    # 1. Load Eval Problems
-    eval_problems = problems.PROBLEMS[20:30]
+    # 1. Load Eval Problems from MBPP
+    print("[Data] Loading MBPP 'sanitized' validation split from HuggingFace...")
+    dataset = load_dataset("mbpp", "sanitized")
+    eval_dataset = dataset["validation"].select(range(10)) # Take first 10 for quick eval
+    
+    eval_problems = []
+    for row in eval_dataset:
+        eval_problems.append({
+            "id": f"mbpp_{row['task_id']}",
+            "description": row["text"],
+            "test_code": "\n".join(row["test_list"])
+        })
     print(f"[Data] Loaded {len(eval_problems)} MBPP Evaluation Problems.")
 
     # 2. Load Model & Trained LoRA Adapters
     print("[Model] Loading Unsloth base model + trained RLVR adapters...")
-    lora_path = "/kaggle/input/rlvr-project-phase-2-unsloth/grpo_saved_lora"
+    lora_path = "./grpo_saved_lora"
     
     if not os.path.exists(lora_path):
         print(f"ERROR: Could not find trained adapters at {lora_path}!")
@@ -47,7 +57,7 @@ def main():
     print("="*60)
 
     for i, problem in enumerate(eval_problems):
-        print(f"\n--- Eval Problem {i+1}/10: {problem['id']} ---")
+        print(f"\n--- Eval Problem {i+1}/{len(eval_problems)}: {problem['id']} ---")
         
         prompt = (
             "You are an expert Python programmer. You must strictly follow this format:\n"
