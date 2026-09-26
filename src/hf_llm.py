@@ -37,12 +37,14 @@ class HuggingFaceLLM:
         self.model.eval()
 
     @torch.no_grad()
-    def generate(self, messages: List[Dict[str, str]]) -> str:
+    def generate(self, messages: List[Dict[str, str]], force_prefix: str = None) -> str:
         """
         Generate a response given a conversation history.
         
         Args:
             messages: List of dicts with 'role' and 'content'.
+            force_prefix: Optional string to append to the prompt to force the model
+                          to start generating with a specific prefix (e.g. "<think>\n").
             
         Returns:
             The generated response string.
@@ -54,6 +56,9 @@ class HuggingFaceLLM:
             add_generation_prompt=True
         )
         
+        if force_prefix:
+            prompt += force_prefix
+            
         inputs = self.tokenizer(
             prompt, 
             return_tensors="pt",
@@ -84,4 +89,7 @@ class HuggingFaceLLM:
             skip_special_tokens=True
         )
         
+        if force_prefix:
+            response = force_prefix + response
+            
         return response.strip()

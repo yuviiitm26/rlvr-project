@@ -230,7 +230,7 @@ class MultiTurnMDP:
             turn_start = time.monotonic()
 
             # ── Step 1: Model generates a response ────────────────
-            raw_response = self.llm.generate(messages)
+            raw_response = self.llm.generate(messages, force_prefix="<think>\n")
 
             # ── Step 2: Extract code from the response ────────────
             extracted_code = self._extract_code(raw_response)

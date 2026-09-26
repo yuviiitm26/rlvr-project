@@ -85,7 +85,7 @@ def main():
         )
         
     grader = PythonJailGrader(use_sandbox=True)
-    llm = HuggingFaceLLM(model=model, tokenizer=tokenizer, temperature=0.7, max_new_tokens=768)
+    llm = HuggingFaceLLM(model=model, tokenizer=tokenizer, temperature=0.7, max_new_tokens=1024)
     mdp = MultiTurnMDP(grader=grader, llm=llm, max_turns=3, reward_config=RewardConfig(discount_gamma=0.9, format_reward_weight=0.5))
     trainer = GRPOTrainer(model=model, tokenizer=tokenizer, group_size=8, lr=5e-5)
     
