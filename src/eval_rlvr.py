@@ -26,7 +26,7 @@ def main():
     for row in eval_dataset:
         eval_problems.append({
             "id": f"mbpp_{row['task_id']}",
-            "description": row["text"],
+            "description": row["prompt"],
             "test_code": "\n".join(row["test_list"])
         })
     print(f"[Data] Loaded {len(eval_problems)} MBPP Evaluation Problems.")
