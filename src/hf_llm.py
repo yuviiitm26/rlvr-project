@@ -50,6 +50,7 @@ class HuggingFaceLLM:
             The generated response string.
         """
         # Apply the chat template (Qwen2.5 / ChatML format)
+        # Note: We append the force_prefix below to kickstart reasoning.
         prompt = self.tokenizer.apply_chat_template(
             messages, 
             tokenize=False, 
