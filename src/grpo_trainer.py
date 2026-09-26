@@ -70,10 +70,6 @@ class GRPOTrainer:
     ) -> torch.Tensor:
         """
         Compute per-token log probabilities for a response given a prompt.
-
-        Returns a 1D tensor of log-probs for each response token.
-        This is used both for old-policy log-probs (frozen, no_grad)
-        and current-policy log-probs (with grad for training).
         """
         full_text = prompt_str + response_str
         inputs = self.tokenizer(
@@ -81,10 +77,17 @@ class GRPOTrainer:
         ).to(self.model.device)
         input_ids = inputs.input_ids  # [1, seq_len]
 
-        prompt_inputs = self.tokenizer(
-            prompt_str, return_tensors="pt", truncation=True, max_length=2048
-        )
-        prompt_len = prompt_inputs.input_ids.shape[1]
+        if not hasattr(self, "prompt_token_cache"):
+            self.prompt_token_cache = {}
+            
+        cache_key = hash(prompt_str)
+        if cache_key not in self.prompt_token_cache:
+            prompt_inputs = self.tokenizer(
+                prompt_str, return_tensors="pt", truncation=True, max_length=2048
+            )
+            self.prompt_token_cache[cache_key] = prompt_inputs.input_ids.shape[1]
+            
+        prompt_len = self.prompt_token_cache[cache_key]
 
         # Forward pass
         outputs = self.model(input_ids=input_ids, return_dict=True)

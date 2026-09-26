@@ -216,15 +216,19 @@ def compute_grpo_advantages(
     Advantages are divided by the frequency of identical generated code strings
     to penalize mode collapse and frequency bias.
     """
-    rewards_arr = np.array(rewards, dtype=np.float64)
-    mean_r = rewards_arr.mean()
-    std_r = rewards_arr.std()
+    n = len(rewards)
+    if n == 0:
+        return []
+        
+    mean_r = sum(rewards) / n
+    variance = sum((r - mean_r) ** 2 for r in rewards) / n
+    std_r = variance ** 0.5
 
     # Zero-variance guard (DAPO will skip these, but we handle gracefully)
     if std_r < epsilon:
-        return [0.0] * len(rewards)
+        return [0.0] * n
 
-    advantages = ((rewards_arr - mean_r) / (std_r + epsilon)).tolist()
+    advantages = [(r - mean_r) / (std_r + epsilon) for r in rewards]
 
     # μ-GRPO Inverse Frequency Scaling
     if codes is not None and len(codes) == len(advantages):

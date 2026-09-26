@@ -162,6 +162,9 @@ class PythonJailGrader:
         self.max_output_bytes = max_output_bytes
         self.use_sandbox = use_sandbox
 
+        # Pre-compile regexes for fast traceback cleaning
+        self.sandbox_path_pattern = re.compile(r'File ".*?submission_[a-f0-9]+\.py"')
+        self.workspace_pattern = re.compile(r'File "/tmp/ai_workspace/.*?\.py"')
         # Resolve the target user's UID/GID
         self.target_user = None
         if self.use_sandbox:
@@ -479,31 +482,25 @@ class PythonJailGrader:
         lines = stderr.strip().split("\n")
         cleaned = []
 
+        # Prepare skip keywords once
+        if not hasattr(self, "skip_keywords"):
+            self.skip_keywords = {
+                "sudo:",
+                "permission denied",
+                "we trust you",
+                "password",
+                "not in the sudoers",
+                "incident will be reported",
+            }
+            
         for line in lines:
             # Replace sandbox paths with generic <solution>
-            line = re.sub(
-                r'File ".*?submission_[a-f0-9]+\.py"',
-                'File "<solution>"',
-                line,
-            )
-            line = re.sub(
-                r'File "/tmp/ai_workspace/.*?\.py"',
-                'File "<solution>"',
-                line,
-            )
+            line = self.sandbox_path_pattern.sub('File "<solution>"', line)
+            line = self.workspace_pattern.sub('File "<solution>"', line)
 
             # Skip system noise
-            if any(
-                skip in line.lower()
-                for skip in [
-                    "sudo:",
-                    "permission denied",
-                    "we trust you",
-                    "password",
-                    "not in the sudoers",
-                    "incident will be reported",
-                ]
-            ):
+            line_lower = line.lower()
+            if any(skip in line_lower for skip in self.skip_keywords):
                 continue
 
             cleaned.append(line)

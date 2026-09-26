@@ -63,7 +63,7 @@ notebook = {
                 "# 3. Run the Multi-Turn RLVR Training Loop (MBPP + Masking)\n",
                 "!useradd -M -s /bin/false sandboxuser 2>/dev/null || echo 'User already exists'\n",
                 "!mkdir -p /tmp/ai_workspace\n",
-                "!python train_rlvr.py\n"
+                "!python train_rlvr.py | tee training_logs.txt\n"
             ]
         }
     ],

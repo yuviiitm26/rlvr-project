@@ -81,7 +81,6 @@ class Turn:
     what code was extracted, and the execution result.
     """
     turn_number: int
-    prompt_messages: List[Dict[str, str]]
     raw_response: str
     extracted_code: str
     execution_result: ExecutionResult
@@ -250,7 +249,6 @@ class MultiTurnMDP:
             # ── Step 5: Record the turn ───────────────────────────
             turn = Turn(
                 turn_number=turn_num,
-                prompt_messages=list(messages),  # snapshot
                 raw_response=raw_response,
                 extracted_code=extracted_code,
                 execution_result=exec_result,
