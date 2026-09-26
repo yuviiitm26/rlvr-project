@@ -146,12 +146,13 @@ def main():
                 input_ids = input_ids.to(model.device)
                 labels = labels.to(model.device)
                 
-                # Old logprobs (No grad)
+                # Old logprobs (No grad, Reference Policy)
                 with torch.no_grad():
-                    old_outputs = model(input_ids=input_ids, return_dict=True)
-                    old_logits = old_outputs.logits[:, :-1, :]
-                    old_labels = input_ids[:, 1:]
-                    old_log_probs = F.log_softmax(old_logits, dim=-1).gather(-1, old_labels.unsqueeze(-1)).squeeze(-1)
+                    with model.disable_adapter():
+                        old_outputs = model(input_ids=input_ids, return_dict=True)
+                        old_logits = old_outputs.logits[:, :-1, :]
+                        old_labels = input_ids[:, 1:]
+                        old_log_probs = F.log_softmax(old_logits, dim=-1).gather(-1, old_labels.unsqueeze(-1)).squeeze(-1)
                 
                 # New logprobs (With grad via Patched Autograd)
                 with autocast(device_type="cuda", dtype=torch.float16):
