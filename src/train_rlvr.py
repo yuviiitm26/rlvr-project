@@ -59,8 +59,18 @@ def main():
     
     train_problems, eval_problems = get_mbpp_80_20()
     
+    # Kaggle mounts data sources here
+    lora_path = "/kaggle/input/rlvr-project-phase-2-unsloth/grpo_saved_lora"
+    
+    if os.path.exists(lora_path):
+        print(f"[Model] Warm Start: Loading previously trained adapters from {lora_path}...")
+        model_to_load = lora_path
+    else:
+        print("[Model] Starting from scratch with Unsloth base model...")
+        model_to_load = "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit"
+        
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit",
+        model_name=model_to_load,
         max_seq_length=4096,
         dtype=torch.float16,
         load_in_4bit=True,
