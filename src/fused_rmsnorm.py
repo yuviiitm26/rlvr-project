@@ -1,4 +1,4 @@
-﻿import torch
+import torch
 import triton
 import triton.language as tl
 
@@ -41,15 +41,18 @@ def fused_rmsnorm(x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor,
     out_res = torch.empty_like(x)
     
     BLOCK_SIZE = triton.next_power_of_2(N)
-    if BLOCK_SIZE > 1024:
-        raise ValueError("T4 optimized kernel requires BLOCK_SIZE <= 1024")
+    if BLOCK_SIZE > 4096:
+        raise ValueError("Kernel currently only optimized for BLOCK_SIZE <= 4096")
+        
+    # Dynamically scale num_warps based on BLOCK_SIZE for maximum T4 occupancy
+    num_warps = 4 if BLOCK_SIZE <= 1024 else 8
         
     grid = (M,)
     _fused_rmsnorm_kernel[grid](
         x, residual, weight, out, out_res,
         x.stride(0), residual.stride(0), out.stride(0), out_res.stride(0),
         N, eps,
-        num_warps=4,
+        num_warps=num_warps,
         BLOCK_SIZE=BLOCK_SIZE
     )
     return out, out_res

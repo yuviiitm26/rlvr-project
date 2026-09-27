@@ -199,9 +199,15 @@ def main():
             
             print(f"  [GRPO] Loss: {total_loss/trainer.group_size:.4f} | KL: {total_kl/trainer.group_size:.4f}")
             
-        # --- Periodic Checkpointing ---
+            # --- Aggressive Checkpointing (Kaggle limit protection) ---
+            if global_step % 50 == 0:
+                checkpoint_dir = f"grpo_checkpoint_step_{global_step}"
+                print(f"  [Save] Mid-epoch checkpoint to {checkpoint_dir}...")
+                model.save_pretrained(checkpoint_dir)
+            
+        # --- End of Epoch Checkpointing ---
         checkpoint_dir = f"grpo_checkpoint_epoch_{epoch+1}"
-        print(f"Saving checkpoint to {checkpoint_dir}...")
+        print(f"Saving epoch checkpoint to {checkpoint_dir}...")
         model.save_pretrained(checkpoint_dir)
         
     print("="*60)

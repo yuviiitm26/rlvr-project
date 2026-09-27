@@ -9,12 +9,12 @@ def get_mbpp_80_20() -> Tuple[List[Dict], List[Dict]]:
     print("[Data Loader] Loading MBPP 'sanitized' dataset from HuggingFace...")
     dataset = load_dataset("mbpp", "sanitized", split="train")
     
-    # 1. Take exactly 100 problems
-    problems_subset = dataset.select(range(100))
+    # 1. Take 250 problems
+    problems_subset = dataset.select(range(250))
     
-    # 2. Split 20/10 for 5.5-hour 1.5B GPU limit (G=8)
-    train_dataset = problems_subset.select(range(20))
-    eval_dataset = problems_subset.select(range(20, 30))
+    # 2. Split 200/50 for final Kaggle T4 run
+    train_dataset = problems_subset.select(range(200))
+    eval_dataset = problems_subset.select(range(200, 250))
     
     def format_problem(row) -> Dict:
         # Combine the assertions into an executable test script
