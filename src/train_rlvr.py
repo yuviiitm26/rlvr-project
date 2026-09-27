@@ -71,7 +71,7 @@ def main():
         
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_to_load,
-        max_seq_length=4096,
+        max_seq_length=3072, # Reduced from 4096 to prevent OOM
         dtype=torch.float16,
         load_in_4bit=True,
     )
@@ -97,7 +97,7 @@ def main():
     grader = PythonJailGrader(use_sandbox=True)
     llm = HuggingFaceLLM(model=model, tokenizer=tokenizer, temperature=0.7, max_new_tokens=1024)
     mdp = MultiTurnMDP(grader=grader, llm=llm, max_turns=3, reward_config=RewardConfig(discount_gamma=0.9, format_reward_weight=0.5))
-    trainer = GRPOTrainer(model=model, tokenizer=tokenizer, group_size=8, lr=5e-5)
+    trainer = GRPOTrainer(model=model, tokenizer=tokenizer, group_size=4, lr=5e-5) # Reduced group_size from 8 to 4 to prevent OOM
     
     # Custom GRPO Loop handling Multi-Turn Masking directly
     EPOCHS = 2
