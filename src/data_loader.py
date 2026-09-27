@@ -9,12 +9,10 @@ def get_mbpp_80_20() -> Tuple[List[Dict], List[Dict]]:
     print("[Data Loader] Loading MBPP 'sanitized' dataset from HuggingFace...")
     dataset = load_dataset("mbpp", "sanitized", split="train")
     
-    # 1. Take 150 problems total for a safe Kaggle window
-    problems_subset = dataset.select(range(150))
-    
-    # 2. Split 120/30 (approx 6 hours of training for 2 epochs)
-    train_dataset = problems_subset.select(range(120))
-    eval_dataset = problems_subset.select(range(120, 150))
+    # The MBPP 'sanitized' train split has exactly 120 problems.
+    # We will use 100 for training and 20 for evaluation.
+    train_dataset = dataset.select(range(100))
+    eval_dataset = dataset.select(range(100, 120))
     
     def format_problem(row) -> Dict:
         # Combine the assertions into an executable test script
