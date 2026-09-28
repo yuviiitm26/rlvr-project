@@ -67,15 +67,17 @@ class HuggingFaceLLM:
             max_length=2048
         ).to(self.model.device)
         
+        do_sample = self.temperature > 0.0
+        
         # Generate completion (locked for thread safety with Accelerate hooks)
         with self.gen_lock:
             outputs = self.model.generate(
                 **inputs,
                 max_new_tokens=self.max_new_tokens,
                 max_length=None,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                do_sample=True,
+                temperature=self.temperature if do_sample else None,
+                top_p=self.top_p if do_sample else None,
+                do_sample=do_sample,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
                 use_cache=True  # Important for fast inference during RL

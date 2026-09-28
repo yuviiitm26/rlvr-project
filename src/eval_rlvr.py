@@ -1,65 +1,72 @@
 """
-RLVR Evaluation Script.
-Loads the trained QLoRA adapters from the Phase 2 training run and evaluates
-them on the 10 MBPP hold-out eval problems.
+Evaluation Script for RLVR (Phase 6)
+Loads the fine-tuned QLoRA adapters and evaluates on the MBPP eval set.
 """
 
 import os
-import sys
 import torch
-from datasets import load_dataset
+
 from unsloth import FastLanguageModel
-import problems
 from sandbox_grader import PythonJailGrader
+from mdp import MultiTurnMDP, RewardConfig
+from hf_llm import HuggingFaceLLM
+from data_loader import get_mbpp_80_20
 
 def main():
     print("="*60)
-    print("🚀 Starting RLVR Evaluation")
+    print("RLVR Phase 6: Evaluation")
     print("="*60)
-
-    # 1. Load Eval Problems from MBPP
-    print("[Data] Loading MBPP 'sanitized' validation split from HuggingFace...")
-    dataset = load_dataset("mbpp", "sanitized")
-    eval_dataset = dataset["validation"].select(range(10)) # Take first 10 for quick eval
     
-    eval_problems = []
-    for row in eval_dataset:
-        eval_problems.append({
-            "id": f"mbpp_{row['task_id']}",
-            "description": row["prompt"],
-            "test_code": "\n".join(row["test_list"])
-        })
-    print(f"[Data] Loaded {len(eval_problems)} MBPP Evaluation Problems.")
-
-    # 2. Load Model & Trained LoRA Adapters
-    print("[Model] Loading Unsloth base model + trained RLVR adapters...")
-    lora_path = "./grpo_saved_lora"
+    train_problems, eval_problems = get_mbpp_80_20()
     
-    if not os.path.exists(lora_path):
-        print(f"ERROR: Could not find trained adapters at {lora_path}!")
-        print("Please ensure the training notebook is attached as a Data Source.")
-        sys.exit(1)
-
-    max_seq_length = 2048
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name = lora_path, # Load directly from the saved LoRA directory!
-        max_seq_length = max_seq_length,
-        dtype = torch.float16,
-        load_in_4bit = True,
-    )
-    FastLanguageModel.for_inference(model)
-    grader = PythonJailGrader()
-
-    total_passed = 0
-
-    print("="*60)
-    print("🧠 Running Evaluation")
-    print("="*60)
-
-    for i, problem in enumerate(eval_problems):
-        print(f"\n--- Eval Problem {i+1}/{len(eval_problems)}: {problem['id']} ---")
+    # Kaggle mounts the Phase 5 output here
+    lora_path = "/kaggle/input/rlvr-project-phase-5/rlvr-project/grpo_saved_lora"
+    
+    if os.path.exists(lora_path):
+        print(f"[Model] Loading fine-tuned RLVR adapters from {lora_path}...")
+        model_to_load = lora_path
+    else:
+        print("[Model] WARNING: LoRA adapters not found. Falling back to base model...")
+        model_to_load = "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit"
         
-        prompt = (
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=model_to_load,
+        max_seq_length=3072,
+        dtype=torch.float16,
+        load_in_4bit=True,
+    )
+    
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        
+    # Ensure ChatML template
+    if not hasattr(tokenizer, "chat_template") or tokenizer.chat_template is None:
+        tokenizer.chat_template = (
+            "{% for message in messages %}"
+            "{{'<|im_start|>' + message['role'] + '\\n' + message['content'] + '<|im_end|>' + '\\n'}}"
+            "{% endfor %}"
+            "{% if add_generation_prompt %}{{ '<|im_start|>assistant\\n' }}{% endif %}"
+        )
+        
+    # Fast inference
+    FastLanguageModel.for_inference(model)
+        
+    # We use greedy decoding for evaluation (temperature=0.0)
+    llm = HuggingFaceLLM(model=model, tokenizer=tokenizer, temperature=0.0, max_new_tokens=1024)
+    grader = PythonJailGrader(use_sandbox=True)
+    
+    # We allow up to 3 turns for self-correction
+    mdp = MultiTurnMDP(grader=grader, llm=llm, max_turns=3, reward_config=RewardConfig(discount_gamma=0.9, format_reward_weight=0.5))
+    
+    solved_count = 0
+    total = len(eval_problems)
+    
+    print(f"\n[Eval] Starting Evaluation on {total} problems...")
+    
+    for i, problem in enumerate(eval_problems):
+        print(f"\n--- Eval Problem {i+1}/{total} | MBPP ID: {problem['id']} ---")
+        
+        problem_prompt = (
             "You are an expert Python programmer. You must strictly follow this format:\n"
             "<think>\n"
             "Step-by-step reasoning goes here...\n"
@@ -69,46 +76,21 @@ def main():
             "```\n\n"
             f"Problem: {problem['description']}"
         )
-
-        messages = [{"role": "user", "content": prompt}]
-        inputs = tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_tensors="pt"
-        ).to("cuda")
-
-        with torch.no_grad():
-            outputs = model.generate(
-                input_ids=inputs,
-                max_new_tokens=1024,
-                temperature=0.7,
-                do_sample=True,
-                pad_token_id=tokenizer.eos_token_id,
-            )
         
-        response = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
+        problem_dict = {"id": problem["id"], "description": problem_prompt, "test_code": problem["test_code"]}
         
-        # Extract code block
-        code_start = response.find("```python")
-        code_end = response.rfind("```")
-        if code_start != -1 and code_end != -1 and code_end > code_start:
-            code = response[code_start + 9:code_end].strip()
-        else:
-            code = response.strip()
-
-        # Grade it
-        result = grader.grade(code, problem["test_code"])
+        # Run 1 trajectory
+        traj = mdp.run_episode(problem_dict)
         
-        if result.passed:
-            print("✅ PASSED!")
-            total_passed += 1
-        else:
-            print(f"❌ FAILED. Error: {result.error_type}")
-            print(f"Feedback: {result.formatted_feedback.splitlines()[0]}")
-
+        status = "SOLVED" if traj.solved else "FAILED"
+        print(f"Result: {traj.num_turns} turns | Reward: {traj.final_reward:.2f} | {status}")
+        
+        if traj.solved:
+            solved_count += 1
+            
+    pass_rate = (solved_count / total) * 100
     print("="*60)
-    print(f"🏆 Final Eval Accuracy: {total_passed}/{len(eval_problems)} ({(total_passed/len(eval_problems))*100:.1f}%)")
+    print(f"FINAL EVALUATION PASS RATE: {solved_count}/{total} ({pass_rate:.1f}%)")
     print("="*60)
 
 if __name__ == "__main__":
