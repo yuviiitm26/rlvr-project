@@ -40,7 +40,7 @@ def main():
     files_to_push = []
     # Use absolute paths based on the script location to avoid CWD issues
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    for d in ["src", "kaggle_deploy", "tools", "eval_deploy"]:
+    for d in ["src", "kaggle_deploy", "tools", "eval_deploy", "docs"]:
         dir_path = os.path.join(repo_root, d)
         if os.path.exists(dir_path):
             files_to_push.extend(get_all_files(dir_path))
