@@ -21,7 +21,7 @@ from rewards import compute_grpo_advantages, should_skip_batch_dapo
 from data_loader import get_mbpp_80_20
 
 
-def build_masked_trajectory(tokenizer, turns, max_length=4096):
+def build_masked_trajectory(tokenizer, turns, max_length=3072):
     """
     Constructs the multi-turn trajectory input_ids and a labels tensor.
     Tokens belonging to the User Prompt and Sandbox Tracebacks are masked with -100.
@@ -60,11 +60,17 @@ def main():
     train_problems, eval_problems = get_mbpp_80_20()
     
     # Kaggle mounts data sources here
-    lora_path = "/kaggle/input/rlvr-project-phase-2-unsloth/grpo_saved_lora"
+    phase4_step50_path = "/kaggle/input/rlvr-project-phase-4/rlvr-project/grpo_checkpoint_step_50"
+    phase2_path = "/kaggle/input/rlvr-project-phase-2-unsloth/grpo_saved_lora"
     
-    if os.path.exists(lora_path):
-        print(f"[Model] Warm Start: Loading previously trained adapters from {lora_path}...")
-        model_to_load = lora_path
+    start_step = 0
+    if os.path.exists(phase4_step50_path):
+        print(f"[Model] Warm Start: Resuming from Phase 4 Step 50: {phase4_step50_path}...")
+        model_to_load = phase4_step50_path
+        start_step = 50
+    elif os.path.exists(phase2_path):
+        print(f"[Model] Warm Start: Loading previously trained adapters from {phase2_path}...")
+        model_to_load = phase2_path
     else:
         print("[Model] Starting from scratch with Unsloth base model...")
         model_to_load = "unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit"
@@ -109,6 +115,9 @@ def main():
         
         for step, problem in enumerate(train_problems):
             global_step += 1
+            if global_step <= start_step:
+                continue
+                
             print(f"\n--- Epoch {epoch+1} | Step {global_step} | MBPP ID: {problem['id']} ---")
             
             # Enforce Prompt Scratchpad
