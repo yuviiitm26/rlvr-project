@@ -103,6 +103,21 @@ def main():
             "sha": blob_sha
         })
 
+    # Explicitly delete old root files by passing sha=None (null in JSON)
+    files_to_delete = [
+        "analyze.py", "check.py", "delete_files.py", "download_logs.py", 
+        "download_logs_v2.py", "download_logs_v5.py", "eval_results.md", 
+        "execution_report.md", "gen_nb.py", "get_id.py", "push_kaggle.py", 
+        "push_kaggle_eval.py", "push_kaggle_eval_base.py"
+    ]
+    for f in files_to_delete:
+        tree_items.append({
+            "path": f,
+            "mode": "100644",
+            "type": "blob",
+            "sha": None
+        })
+
     tree_url = f"https://api.github.com/repos/{username}/{REPO_NAME}/git/trees"
     tree_resp = requests.post(tree_url, headers=headers, json={
         "base_tree": base_tree_sha,
