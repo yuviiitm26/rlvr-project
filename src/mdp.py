@@ -166,12 +166,12 @@ class MultiTurnMDP:
         "You are a Python coding assistant. Your task is to write correct "
         "Python code that passes all test assertions.\n\n"
         "RULES:\n"
-        "1. Wrap your code in a ```python code block.\n"
-        "2. Before writing code, reason about the problem inside "
-        "<think></think> tags.\n"
-        "3. Write ONLY the solution function(s). Do NOT include test code.\n"
-        "4. If you receive error feedback, analyze it carefully and fix "
-        "your solution.\n"
+        "1. Before writing code, reason about the problem inside <think></think> tags.\n"
+        "2. INSIDE your <think> tags, you MUST write your own test cases to verify your logic. "
+        "Write these tests in a ```python block containing `assert` statements.\n"
+        "3. AFTER the <think> tags, write ONLY the final solution function(s) wrapped in a ```python block. "
+        "Do NOT include test code in the final solution block.\n"
+        "4. If you receive error feedback, analyze it carefully and fix your solution.\n"
     )
 
     def __init__(
@@ -225,6 +225,7 @@ class MultiTurnMDP:
         messages = self._build_initial_messages(problem)
 
         episode_start = time.monotonic()
+        seen_codes = set()
 
         for turn_num in range(1, self.max_turns + 1):
             turn_start = time.monotonic()
@@ -235,9 +236,48 @@ class MultiTurnMDP:
             # ── Step 2: Extract code from the response ────────────
             extracted_code = self._extract_code(raw_response)
 
+            # --- Repetitive Loop Penalty ---
+            if extracted_code in seen_codes and extracted_code.strip() != '':
+                exec_result = ExecutionResult(
+                    stdout='',
+                    stderr='[RLVR PENALTY] You generated the exact same code as a previous turn.',
+                    return_code=-1,
+                    timed_out=False,
+                    elapsed_seconds=0.0,
+                    passed=False,
+                    reward=-1.0,
+                    formatted_feedback='[FAIL] Repetitive Loop: You generated the exact same code. You must try a different approach.',
+                    error_type='Repetitive_Loop',
+                    raw_code=extracted_code,
+                    error_line=-1,
+                    tests_passed=0,
+                    total_tests=0,
+                )
+                reward = -1.0
+                turn_elapsed = time.monotonic() - turn_start
+                
+                turn = Turn(
+                    turn_number=turn_num,
+                    prompt_messages=list(messages),
+                    raw_response=raw_response,
+                    extracted_code=extracted_code,
+                    execution_result=exec_result,
+                    reward=reward,
+                    elapsed_seconds=turn_elapsed,
+                )
+                trajectory.turns.append(turn)
+                trajectory.solved = False
+                trajectory.final_reward = reward
+                break
+                
+            seen_codes.add(extracted_code)
+
             # ── Step 3: Grade the code ────────────────────────────
+            # Step 2.75: Extract Self-Verification Tests
+            extracted_sv_tests = self._extract_self_tests(raw_response)
+
             exec_result = self.grader.grade(
-                extracted_code, problem["test_code"]
+                extracted_code, problem["test_code"], extracted_sv_tests
             )
 
             # ── Step 4: Compute reward ────────────────────────────
@@ -340,6 +380,22 @@ class MultiTurnMDP:
     # ────────────────────────────────────────────────────────────────
     # Internal: Code Extraction
     # ────────────────────────────────────────────────────────────────
+
+    def _extract_self_tests(self, response: str) -> str:
+        """Extracts self-verification assertions written inside the <think> block."""
+        import re
+        think_match = re.search(r'<think>(.*?)</think>', response, re.DOTALL | re.IGNORECASE)
+        if not think_match:
+            return ""
+        
+        think_content = think_match.group(1)
+        blocks = re.findall(r'```python(.*?)```', think_content, re.DOTALL | re.IGNORECASE)
+        
+        sv_code = []
+        for b in blocks:
+            if 'assert ' in b:
+                sv_code.append(b.strip())
+        return "\n".join(sv_code)
 
     def _extract_code(self, response: str) -> str:
         """

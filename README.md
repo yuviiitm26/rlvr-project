@@ -62,4 +62,4 @@ After training the Qwen2.5-1.5B-Instruct model for 2 epochs on the MBPP training
 With the RLVR architecture now fully proven and 100% stable, future improvements will focus on scaling:
 - **Scale the Model:** Upgrade from Qwen-1.5B to Llama-3-8B.
 - **Scale the Data:** Train on 10,000+ generic Python problems.
-- **Scale the Compute:** Train for thousands of steps to deeply ingrain the multi-turn debugging behavior of the LLM model.
+- **Scale the Compute:** Train for thousands of steps to deeply ingrain the multi-turn debugging behavior.

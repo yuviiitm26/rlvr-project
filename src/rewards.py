@@ -26,6 +26,7 @@ Algorithmic Improvements:
 """
 
 from dataclasses import dataclass
+import re
 from typing import List
 
 import numpy as np
@@ -126,6 +127,62 @@ def dense_pass_ratio_reward(passed_tests: int, total_tests: int) -> float:
     return min(passed_tests / total_tests, 1.0)
 
 
+
+# ────────────────────────────────────────────────────────────────
+# Process Reward Model (PRM) Scaffolding
+# ────────────────────────────────────────────────────────────────
+
+class HeuristicPRM:
+    """
+    Scaffolding for a Process Reward Model (PRM) ala OpenAI's o1.
+    
+    Currently implemented as a Heuristic PRM to evaluate the quality 
+    of the intermediate reasoning steps inside <think> tags. 
+    This class is designed to be hot-swappable with a Neural PRM (e.g., 
+    a HuggingFace sequence classification model) when scaling up compute.
+    """
+    def __init__(self):
+        # Keyword triggers for heuristic evaluation
+        self.planning_words = [r"\bfirst\b", r"\bthen\b", r"\bfinally\b", r"\bstep \d+\b", r"^\s*\d+\.\s+"]
+        self.edge_case_words = [r"edge case", r"empty", r"negative", r"zero", r"boundary", r"null", r"none"]
+        self.reflection_words = [r"wait", r"actually", r"however", r"incorrect", r"let me", r"re-read", r"rethink", r"no,"]
+        self.complexity_words = [r"time complexity", r"o\(n", r"space complexity", r"efficient", r"optimize"]
+
+    def evaluate(self, think_content: str) -> float:
+        """
+        Evaluates the reasoning trace and assigns a dense process reward.
+        Max process reward = 0.5
+        """
+        if not think_content or not think_content.strip():
+            return 0.0
+
+        think_lower = think_content.lower()
+        prm_score = 0.0
+
+        # 1. Structure (0.1): Did it break thoughts into multiple paragraphs?
+        paragraphs = [p for p in think_content.split("\n\n") if p.strip()]
+        if len(paragraphs) >= 3:
+            prm_score += 0.1
+
+        # 2. Planning (0.1): Did it formulate a step-by-step plan?
+        if any(re.search(pattern, think_lower, re.MULTILINE) for pattern in self.planning_words):
+            prm_score += 0.1
+
+        # 3. Edge Cases (0.1): Did it consider boundary conditions?
+        if any(re.search(pattern, think_lower) for pattern in self.edge_case_words):
+            prm_score += 0.1
+
+        # 4. Reflection (0.1): Did it exhibit self-correction or critique?
+        if any(re.search(pattern, think_lower) for pattern in self.reflection_words):
+            prm_score += 0.1
+
+        # 5. Complexity (0.1): Did it analyze algorithm efficiency?
+        if any(re.search(pattern, think_lower) for pattern in self.complexity_words):
+            prm_score += 0.1
+
+        return prm_score
+
+
 def format_compliance_reward(response: str) -> float:
     """
     Reward for proper response formatting.
@@ -168,36 +225,82 @@ def composite_reward(
     config: RewardConfig,
 ) -> float:
     """
-    Weighted combination of execution reward, partial compilation reward, and format bonus.
+    Implements a 4-tier Dense Reward Scorecard.
+    Max Score = 2.0
+    1. Format (+0.2 max)
+    2. Syntax (+0.3 max)
+    3. Logic (+1.0 max)
+    4. Optimization (+0.5 max)
     """
-    passed = exec_result.passed
-    if config.binary_only:
-        exec_reward = binary_reward(passed)
-    else:
-        exec_reward = discounted_reward(passed, turn, config.discount_gamma)
+    total_reward = 0.0
 
-    # Process Rewards (Min-Form Credit Assignment)
-    # If the code threw a syntax error or runtime error, it failed at error_line.
-    # We give a partial process reward based on how far it got!
-    if not passed:
-        error_line = getattr(exec_result, "error_line", -1)
-        total_lines = getattr(exec_result, "total_lines", 0)
-        
-        if error_line > 0 and total_lines > 0:
-            if error_line > total_lines:
-                # The error happened inside the test code!
-                # The model's logic compiled and ran successfully, but failed the assertion.
-                exec_reward += 0.3
+    # 1. Formatting Reward (+0.2 max)
+    if "<think>" in response and "</think>" in response:
+        total_reward += 0.1
+    if "```python" in response and response.count("```") >= 2:
+        total_reward += 0.1
+
+    # 2. Syntax Reward (+0.3 max)
+    # If the code compiled and ran far enough to hit an AssertionError (or it passed),
+    # it means the Python syntax was valid.
+    error_type = getattr(exec_result, "error_type", "None")
+    syntax_failures = ["Syntax_Error", "Indentation_Error", "Name_Error", "Type_Error"]
+    
+    if error_type not in syntax_failures and not (error_type == "None" and not exec_result.passed and exec_result.return_code != 0):
+        # We give the +0.3 if it passed, or if the failure was an assertion/timeout (meaning it compiled)
+        total_reward += 0.3
+
+    # 3. Logic Reward (+1.0 max)
+    passed_tests = getattr(exec_result, "tests_passed", 0)
+    total_tests = getattr(exec_result, "total_tests", 0)
+    
+    if total_tests > 0:
+        logic_score = (passed_tests / total_tests) * 1.0
+        # Discount logic score by turn to penalize multi-turn thrashing
+        discounted_logic = logic_score * (config.discount_gamma ** (turn - 1))
+        total_reward += discounted_logic
+
+    # 4. Optimization Reward (+0.5 max)
+    # Only award if the code actually solved the problem perfectly
+    if exec_result.passed and passed_tests == total_tests and total_tests > 0:
+        elapsed = getattr(exec_result, "elapsed_seconds", 999.0)
+        if elapsed < 0.1:
+            total_reward += 0.5
+        elif elapsed < 0.5:
+            # Partial credit for slightly slower code
+            total_reward += 0.2
+
+    # 5. Length & Efficiency Penalty (Max -0.5 penalty)
+    # Discourages rambling in the <think> tags or generating bloated code.
+    # We apply a -0.05 penalty for every 1000 characters generated.
+    length_penalty = - (len(response) / 1000.0) * 0.05
+    length_penalty = max(length_penalty, -0.5) # Cap the penalty at -0.5
+    total_reward += length_penalty
+
+    # 6. Process Reward Model (PRM) (+0.5 max)
+    # Evaluates the internal logic steps independently of the outcome.
+    think_match = re.search(r'<think>(.*?)</think>', response, re.DOTALL | re.IGNORECASE)
+    if think_match:
+        think_content = think_match.group(1)
+        prm = HeuristicPRM()
+        prm_score = prm.evaluate(think_content)
+        total_reward += prm_score
+
+    # 7. Self-Verification Reward (+0.5 max)
+    # Rewards the model if it successfully wrote its own test cases AND passed the real tests.
+    sv_passed = getattr(exec_result, "sv_passed", 0)
+    sv_total = getattr(exec_result, "sv_total", 0)
+    
+    if exec_result.passed and passed_tests == total_tests and total_tests > 0:
+        if sv_total > 0:
+            # Massive bonus for self-verification
+            if sv_passed == sv_total and sv_total >= 2:
+                total_reward += 0.5
             else:
-                # Code crashed mid-execution. Reward it for the lines it successfully navigated!
-                progress = error_line / total_lines
-                exec_reward += 0.1 + (0.2 * progress)
-        elif getattr(exec_result, "error_type", "None") == "Assertion_Failure":
-            exec_reward += 0.3
+                # Partial bonus
+                total_reward += (sv_passed / sv_total) * 0.2
 
-    fmt_reward = format_compliance_reward(response)
-
-    return exec_reward + config.format_reward_weight * fmt_reward
+    return total_reward
 
 
 # ════════════════════════════════════════════════════════════════════

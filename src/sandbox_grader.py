@@ -78,6 +78,10 @@ class ExecutionResult:
     error_type: str = "None"
     raw_code: str = ""
     error_line: int = -1
+    tests_passed: int = 0
+    total_tests: int = 0
+    sv_passed: int = 0
+    sv_total: int = 0
     total_lines: int = 0
 
     def to_dict(self) -> dict:
@@ -228,14 +232,14 @@ class PythonJailGrader:
     # Public API (compatible with SubprocessGrader)
     # ────────────────────────────────────────────────────────────────
 
-    def grade(self, code: str, test_code: str) -> ExecutionResult:
+    def grade(self, code: str, test_code: str, sv_test_code: str = "") -> ExecutionResult:
         """
         Execute `code` + `test_code` in the sandbox and return structured result.
 
         This is the main interface consumed by the MDP loop.
         API-compatible with SubprocessGrader.grade().
         """
-        full_script = self._build_script(code, test_code)
+        full_script = self._build_script(code, test_code, sv_test_code)
         script_path = self._write_temp_script(full_script)
 
         try:
@@ -253,14 +257,47 @@ class PythonJailGrader:
     # Internal: Script Construction
     # ────────────────────────────────────────────────────────────────
 
-    def _build_script(self, code: str, test_code: str) -> str:
-        """Combine solution code and test assertions into a single executable."""
+    def _build_script(self, code: str, test_code: str, sv_test_code: str = "") -> str:
+        """Combine solution code and test assertions into a single executable, wrapped for partial credit."""
+        
+        def wrap_tests(tests_str, passed_var, total_var):
+            lines = tests_str.strip().split('\n')
+            wrapped = []
+            for line in lines:
+                if line.strip():
+                    wrapped.append('try:')
+                    wrapped.append(f'    {line}')
+                    wrapped.append(f'    {passed_var} += 1')
+                    wrapped.append('except AssertionError:')
+                    wrapped.append('    pass')
+                    wrapped.append('except Exception as e:')
+                    wrapped.append('    pass')
+                    wrapped.append(f'{total_var} += 1')
+            return '\n'.join(wrapped)
+
+        wrapped_lines = []
+        wrapped_lines.append('_rlvr_passed = 0')
+        wrapped_lines.append('_rlvr_total = 0')
+        wrapped_lines.append('_sv_passed = 0')
+        wrapped_lines.append('_sv_total = 0')
+        wrapped_lines.append('import sys')
+        
+        if sv_test_code:
+            wrapped_lines.append(wrap_tests(sv_test_code, '_sv_passed', '_sv_total'))
+            
+        if test_code:
+            wrapped_lines.append(wrap_tests(test_code, '_rlvr_passed', '_rlvr_total'))
+                
+        wrapped_lines.append('print(f"__RLVR_SCORE__:{_rlvr_passed}/{_rlvr_total}:{_sv_passed}/{_sv_total}")')
+        wrapped_lines.append('if _rlvr_passed < _rlvr_total: sys.exit(1)')
+        wrapped_test_code = '\n'.join(wrapped_lines)
+        
         return (
             "# -*- coding: utf-8 -*-\n"
             "# === AI-GENERATED SOLUTION ===\n"
             f"{code.strip()}\n\n"
             "# === TEST ASSERTIONS ===\n"
-            f"{test_code.strip()}\n"
+            f"{wrapped_test_code}\n"
         )
 
     def _write_temp_script(self, script: str) -> Path:
@@ -321,8 +358,26 @@ class PythonJailGrader:
             stderr = ""
             return_code = -1
 
-        # Determine pass/fail
-        passed = (return_code == 0) and (not timed_out)
+        # Determine pass/fail based on our wrapped output
+        tests_passed = 0
+        total_tests = 0
+        
+        # Parse the __RLVR_SCORE__ from stdout
+        sv_passed, sv_total = 0, 0
+        score_match = re.search(r"__RLVR_SCORE__:(\d+)/(\d+):(\d+)/(\d+)", stdout)
+        if score_match:
+            tests_passed = int(score_match.group(1))
+            total_tests = int(score_match.group(2))
+            sv_passed = int(score_match.group(3))
+            sv_total = int(score_match.group(4))
+            
+            # Remove the score from stdout so it doesn't leak into model feedback
+            stdout = re.sub(r"__RLVR_SCORE__:\d+/\d+:\d+/\d+\n?", "", stdout)
+            
+        passed = (return_code == 0) and (not timed_out) and (tests_passed == total_tests) and (total_tests > 0)
+        
+        # We will compute the new dense reward later in rewards.py, 
+        # but for compatibility we can leave a float here.
         reward = 1.0 if passed else 0.0
         error_type = self._classify_error(return_code, stderr, timed_out)
 
@@ -376,6 +431,10 @@ class PythonJailGrader:
             raw_code=raw_code,
             error_line=error_line,
             total_lines=total_lines,
+            tests_passed=tests_passed,
+            total_tests=total_tests,
+            sv_passed=sv_passed,
+            sv_total=sv_total,
         )
 
     # ────────────────────────────────────────────────────────────────
