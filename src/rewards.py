@@ -300,6 +300,28 @@ def composite_reward(
                 # Partial bonus
                 total_reward += (sv_passed / sv_total) * 0.2
 
+    # 8. AST Complexity (Pythonic Code) Bonus/Penalty (-0.3 to +0.2)
+    # Rewards flat, readable code and penalizes deeply nested spaghetti code.
+    if exec_result.passed and passed_tests == total_tests and total_tests > 0:
+        import ast
+        try:
+            tree = ast.parse(exec_result.raw_code)
+            complexity = 1
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.If, ast.For, ast.While, ast.Try, ast.ExceptHandler, ast.With, ast.ListComp, ast.DictComp)):
+                    complexity += 1
+            
+            if complexity <= 3:
+                total_reward += 0.2 # Very flat, elegant
+            elif complexity <= 5:
+                total_reward += 0.1 # Standard, clean
+            elif complexity > 10:
+                total_reward -= 0.3 # High cyclomatic complexity (Spaghetti)
+            elif complexity > 7:
+                total_reward -= 0.1 # Starting to get messy
+        except Exception:
+            pass # Ignore parsing errors here (handled by syntax reward)
+
     return total_reward
 
 
