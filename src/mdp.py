@@ -226,6 +226,7 @@ class MultiTurnMDP:
 
         episode_start = time.monotonic()
         seen_codes = set()
+        current_discount = 1.0
 
         for turn_num in range(1, self.max_turns + 1):
             turn_start = time.monotonic()
@@ -313,6 +314,17 @@ class MultiTurnMDP:
             # ── Step 7: Append feedback for next turn ─────────────
             # This is the MDP state transition: the model's failed attempt
             # and the grader's feedback become part of the new state.
+            # --- Adaptive Error Discounting (Dynamic MDP) ---
+            # Update the discount factor for the NEXT turn based on the severity of the error
+            if exec_result.error_type == "Timeout":
+                current_discount *= 0.5   # Harsh penalty for infinite loops
+            elif exec_result.error_type in ["Syntax_Error", "Indentation_Error", "Name_Error"]:
+                current_discount *= 0.8   # Moderate penalty for basic syntax errors
+            elif exec_result.error_type == "Assertion_Failure":
+                current_discount *= 0.9   # Gentle penalty for logic errors
+            else:
+                current_discount *= 0.95  # Very gentle penalty for other runtime errors
+
             messages.append({"role": "assistant", "content": raw_response})
             messages.append(
                 {
@@ -427,7 +439,7 @@ class MultiTurnMDP:
     # ────────────────────────────────────────────────────────────────
 
     def _compute_reward(
-        self, exec_result: "ExecutionResult", turn: int, raw_response: str
+        self, exec_result: "ExecutionResult", turn: int, raw_response: str, current_discount: float = None
     ) -> float:
         """
         Compute the reward for this turn using the configured strategy.
@@ -439,4 +451,5 @@ class MultiTurnMDP:
             turn=turn,
             response=raw_response,
             config=self.reward_config,
+            current_discount=current_discount,
         )

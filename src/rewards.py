@@ -223,6 +223,7 @@ def composite_reward(
     turn: int,
     response: str,
     config: RewardConfig,
+    current_discount: float = None,
 ) -> float:
     """
     Implements a 4-tier Dense Reward Scorecard.
@@ -257,7 +258,12 @@ def composite_reward(
     if total_tests > 0:
         logic_score = (passed_tests / total_tests) * 1.0
         # Discount logic score by turn to penalize multi-turn thrashing
-        discounted_logic = logic_score * (config.discount_gamma ** (turn - 1))
+        if current_discount is None:
+            # Fallback to static discount
+            discounted_logic = logic_score * (config.discount_gamma ** (turn - 1))
+        else:
+            # Use dynamic adaptive discount
+            discounted_logic = logic_score * current_discount
         total_reward += discounted_logic
 
     # 4. Optimization Reward (+0.5 max)
