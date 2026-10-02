@@ -257,6 +257,16 @@ def composite_reward(
     
     if total_tests > 0:
         logic_score = (passed_tests / total_tests) * 1.0
+        
+        # --- Coverage Reward Scaling ---
+        cov_hit = getattr(exec_result, "coverage_hit", 0)
+        cov_total = getattr(exec_result, "coverage_total", 0)
+        
+        # If the code passed tests but has dead code, penalize logic score
+        if cov_total > 0 and passed_tests == total_tests:
+            cov_ratio = min(cov_hit / cov_total, 1.0)
+            logic_score = logic_score * cov_ratio
+            
         # Discount logic score by turn to penalize multi-turn thrashing
         if current_discount is None:
             # Fallback to static discount

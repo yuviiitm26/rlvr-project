@@ -82,6 +82,8 @@ class ExecutionResult:
     total_tests: int = 0
     sv_passed: int = 0
     sv_total: int = 0
+    coverage_hit: int = 0
+    coverage_total: int = 0
     total_lines: int = 0
 
     def to_dict(self) -> dict:
@@ -275,12 +277,26 @@ class PythonJailGrader:
                     wrapped.append(f'{total_var} += 1')
             return '\n'.join(wrapped)
 
+        header_lines = [
+            "# -*- coding: utf-8 -*-",
+            "import sys",
+            "_rlvr_exec = set()",
+            "def _rlvr_trace(frame, event, arg):",
+            "    if event == 'line' and frame.f_code.co_filename == __file__:",
+            "        _rlvr_exec.add(frame.f_lineno)",
+            "    return _rlvr_trace",
+            "sys.settrace(_rlvr_trace)",
+            "# === AI-GENERATED SOLUTION ==="
+        ]
+        start_line = len(header_lines) + 1
+        ai_lines = code.strip().split('\n')
+        end_line = start_line + len(ai_lines) - 1
+
         wrapped_lines = []
         wrapped_lines.append('_rlvr_passed = 0')
         wrapped_lines.append('_rlvr_total = 0')
         wrapped_lines.append('_sv_passed = 0')
         wrapped_lines.append('_sv_total = 0')
-        wrapped_lines.append('import sys')
         
         if sv_test_code:
             wrapped_lines.append(wrap_tests(sv_test_code, '_sv_passed', '_sv_total'))
@@ -288,15 +304,16 @@ class PythonJailGrader:
         if test_code:
             wrapped_lines.append(wrap_tests(test_code, '_rlvr_passed', '_rlvr_total'))
                 
+        wrapped_lines.append(f'__cov_hit = len([l for l in _rlvr_exec if {start_line} <= l <= {end_line}])')
         wrapped_lines.append('print(f"__RLVR_SCORE__:{_rlvr_passed}/{_rlvr_total}:{_sv_passed}/{_sv_total}")')
+        wrapped_lines.append('print(f"__RLVR_COV__:{__cov_hit}")')
         wrapped_lines.append('if _rlvr_passed < _rlvr_total: sys.exit(1)')
         wrapped_test_code = '\n'.join(wrapped_lines)
         
         return (
-            "# -*- coding: utf-8 -*-\n"
-            "# === AI-GENERATED SOLUTION ===\n"
-            f"{code.strip()}\n\n"
-            "# === TEST ASSERTIONS ===\n"
+            "\n".join(header_lines) + "\n" +
+            f"{code.strip()}\n\n" +
+            "# === TEST ASSERTIONS ===\n" +
             f"{wrapped_test_code}\n"
         )
 
@@ -374,6 +391,19 @@ class PythonJailGrader:
             # Remove the score from stdout so it doesn't leak into model feedback
             stdout = re.sub(r"__RLVR_SCORE__:\d+/\d+:\d+/\d+\n?", "", stdout)
             
+        coverage_hit = 0
+        cov_match = re.search(r"__RLVR_COV__:(\d+)", stdout)
+        if cov_match:
+            coverage_hit = int(cov_match.group(1))
+            stdout = re.sub(r"__RLVR_COV__:\d+\n?", "", stdout)
+            
+        import ast
+        try:
+            tree = ast.parse(raw_code)
+            coverage_total = len(set(node.lineno for node in ast.walk(tree) if hasattr(node, "lineno")))
+        except Exception:
+            coverage_total = 0
+            
         passed = (return_code == 0) and (not timed_out) and (tests_passed == total_tests) and (total_tests > 0)
         
         # We will compute the new dense reward later in rewards.py, 
@@ -435,6 +465,8 @@ class PythonJailGrader:
             total_tests=total_tests,
             sv_passed=sv_passed,
             sv_total=sv_total,
+            coverage_hit=coverage_hit,
+            coverage_total=coverage_total,
         )
 
     # ────────────────────────────────────────────────────────────────
