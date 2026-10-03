@@ -107,12 +107,23 @@ def main():
     grader = PythonJailGrader(use_sandbox=True)
     llm = HuggingFaceLLM(model=model, tokenizer=tokenizer, temperature=0.7, max_new_tokens=1024)
     mdp = MultiTurnMDP(grader=grader, llm=llm, max_turns=3, reward_config=RewardConfig(discount_gamma=0.9, format_reward_weight=0.5))
-    trainer = GRPOTrainer(model=model, tokenizer=tokenizer, group_size=4, lr=5e-5) # Reduced group_size from 8 to 4 to prevent OOM
+        # Calculate steps for LR Scheduler
+    EPOCHS = 2
+    total_steps_per_epoch = len(train_problems)
+    total_training_steps = EPOCHS * total_steps_per_epoch
+    warmup_steps = max(10, int(total_training_steps * 0.1)) # 10% warmup
+    
+    trainer = GRPOTrainer(
+        model=model, 
+        tokenizer=tokenizer, 
+        group_size=4, 
+        lr=5e-5,
+        total_steps=total_training_steps,
+        warmup_steps=warmup_steps
+    )
     
     # Custom GRPO Loop handling Multi-Turn Masking directly
-    EPOCHS = 2
     global_step = 0
-    total_steps_per_epoch = len(train_problems)
     
     for epoch in range(EPOCHS):
         print(f"\n{'='*40}")

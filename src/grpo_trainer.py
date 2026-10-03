@@ -18,6 +18,7 @@ and optimizer updates in FP32.
 import torch
 import torch.nn.functional as F
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 from torch.amp import GradScaler, autocast
 from typing import List, Dict, Any, Optional
 from mdp import Trajectory
@@ -34,6 +35,8 @@ class GRPOTrainer:
         clip_ratio: float = 0.2,
         group_size: int = 4,
         max_grad_norm: float = 1.0,
+        total_steps: int = 200,
+        warmup_steps: int = 20,
     ):
         """
         Args:
@@ -62,6 +65,12 @@ class GRPOTrainer:
         # GradScaler for mixed-precision: prevents FP16 underflow/overflow
         # during backward pass by dynamically scaling the loss.
         self.scaler = GradScaler()
+        
+        # Learning Rate Schedulers (Warmup + Cosine Decay)
+        # Prevents early chaotic gradients and late overshooting.
+        warmup = LinearLR(self.optimizer, start_factor=0.05, total_iters=warmup_steps)
+        cosine = CosineAnnealingLR(self.optimizer, T_max=max(1, total_steps - warmup_steps), eta_min=lr * 0.1)
+        self.scheduler = SequentialLR(self.optimizer, schedulers=[warmup, cosine], milestones=[warmup_steps])
 
     def _compute_log_probs(
         self,
@@ -252,6 +261,9 @@ class GRPOTrainer:
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
         self.scaler.step(self.optimizer)
         self.scaler.update()
+        
+        # Step the learning rate scheduler
+        self.scheduler.step()
         
         # Adaptive KL Controller
         avg_kl = total_kl / max(valid_count, 1)
