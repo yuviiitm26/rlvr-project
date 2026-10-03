@@ -226,12 +226,21 @@ def composite_reward(
     current_discount: float = None,
 ) -> float:
     """
-    Implements a 4-tier Dense Reward Scorecard.
-    Max Score = 2.0
-    1. Format (+0.2 max)
-    2. Syntax (+0.3 max)
-    3. Logic (+1.0 max)
-    4. Optimization (+0.5 max)
+    Implements an 8-tier Dense Reward Scorecard (DeepSeek-R1 + OpenAI o1 Hybrid).
+
+    Reward Tiers:
+      1. Formatting Reward       (+0.2 max)  — <think> tags + ```python blocks
+      2. Syntax Reward            (+0.3 max)  — Code compiles without SyntaxError
+      3. Logic Reward             (+1.0 max)  — Partial credit per test passed
+         └─ Coverage Scaling      (×ratio)    — Penalizes dead/unreachable code
+         └─ Adaptive Discount     (×gamma)    — Error-severity-based turn penalty
+      4. Optimization Reward      (+0.5 max)  — Fast execution (<0.1s bonus)
+      5. Length Penalty            (-0.5 max)  — Discourages verbose rambling
+      6. Process Reward (PRM)     (+0.5 max)  — Heuristic reasoning quality
+      7. Self-Verification        (+0.5 max)  — Model writes & passes own tests
+      8. AST Complexity           (-0.3/+0.2) — Cyclomatic complexity scoring
+
+    Theoretical Max Score ≈ 3.2  (all bonuses, zero penalties, turn 1 solve)
     """
     total_reward = 0.0
 

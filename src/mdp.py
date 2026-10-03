@@ -283,7 +283,7 @@ class MultiTurnMDP:
 
             # ── Step 4: Compute reward ────────────────────────────
             reward = self._compute_reward(
-                exec_result, turn_num, raw_response
+                exec_result, turn_num, raw_response, current_discount
             )
 
             turn_elapsed = time.monotonic() - turn_start
