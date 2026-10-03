@@ -18,7 +18,7 @@ from mdp import MultiTurnMDP, RewardConfig
 from hf_llm import HuggingFaceLLM
 from grpo_trainer import GRPOTrainer
 from rewards import compute_grpo_advantages, should_skip_batch_dapo
-from data_loader import get_mbpp_80_20
+from data_loader import get_mbpp_80_20, CurriculumScheduler
 
 
 def build_masked_trajectory(tokenizer, turns, max_length=3072):
@@ -58,6 +58,10 @@ def main():
     print("="*60)
     
     train_problems, eval_problems = get_mbpp_80_20()
+    
+    # Initialize the 3-Phase Curriculum Scheduler
+    # Phase 1 (1-40): Easy only -> Phase 2 (40-120): Easy+Medium -> Phase 3 (120+): All
+    scheduler = CurriculumScheduler(train_problems, phase1_end=40, phase2_end=120)
     
     # Kaggle mounts data sources here
     phase4_step50_path = "/kaggle/input/rlvr-project-phase-4/rlvr-project/grpo_checkpoint_step_50"
@@ -108,17 +112,27 @@ def main():
     # Custom GRPO Loop handling Multi-Turn Masking directly
     EPOCHS = 2
     global_step = 0
+    total_steps_per_epoch = len(train_problems)
+    
     for epoch in range(EPOCHS):
         print(f"\n{'='*40}")
         print(f"🚀 STARTING EPOCH {epoch+1}/{EPOCHS}")
         print(f"{'='*40}\n")
         
-        for step, problem in enumerate(train_problems):
+        # Get perfectly curated problems for this epoch based on the current global_step
+        epoch_problems = scheduler.get_epoch_problems(
+            epoch=epoch,
+            step_offset=global_step,
+            total_steps_per_epoch=total_steps_per_epoch
+        )
+        
+        for local_step, problem in enumerate(epoch_problems):
             global_step += 1
             if global_step <= start_step:
                 continue
                 
-            print(f"\n--- Epoch {epoch+1} | Step {global_step} | MBPP ID: {problem['id']} ---")
+            current_phase = scheduler.get_current_phase(global_step)
+            print(f"\n--- Epoch {epoch+1} | Step {global_step} | Phase {current_phase} ({problem['difficulty'].upper()}) | ID: {problem['id']} ---")
             
             # Enforce Prompt Scratchpad
             problem_prompt = (

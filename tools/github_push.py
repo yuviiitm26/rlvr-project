@@ -62,10 +62,10 @@ def main():
     ]
     files_to_push.extend(artifacts)
     
-    ref_url = f"https://api.github.com/repos/{username}/{REPO_NAME}/git/refs/heads/main"
+    ref_url = f"https://api.github.com/repos/{username}/{REPO_NAME}/git/refs/heads/iterations"
     resp = requests.get(ref_url, headers=headers)
     if resp.status_code != 200:
-        print("Failed to get main branch ref:", resp.json())
+        print("Failed to get iterations branch ref:", resp.json())
         return
     commit_sha = resp.json()["object"]["sha"]
 
