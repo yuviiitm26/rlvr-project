@@ -59,9 +59,9 @@ def main():
     
     train_problems, eval_problems = get_mbpp_80_20()
     
-    # Initialize the 3-Phase Curriculum Scheduler
-    # Phase 1 (1-40): Easy only -> Phase 2 (40-120): Easy+Medium -> Phase 3 (120+): All
-    scheduler = CurriculumScheduler(train_problems, phase1_end=40, phase2_end=120)
+    # Initialize the 3-Phase Curriculum Scheduler for 374 problems (748 total steps)
+    # Phase 1 (1-150): Easy only -> Phase 2 (150-400): Easy+Medium -> Phase 3 (400+): All
+    scheduler = CurriculumScheduler(train_problems, phase1_end=150, phase2_end=400)
     
     # Kaggle mounts data sources here
     phase4_step50_path = "/kaggle/input/rlvr-project-phase-4/rlvr-project/grpo_checkpoint_step_50"

@@ -207,8 +207,8 @@ class CurriculumScheduler:
 
 def get_mbpp_80_20() -> Tuple[List[Dict], List[Dict]]:
     """
-    Loads the sanitized MBPP dataset from HuggingFace and strictly limits
-    it to 100 problems. Slices into 80 problems for training and 20 for evaluation.
+    Loads the sanitized MBPP dataset from HuggingFace.
+    Uses 374 problems for training and the remaining 53 for evaluation.
     
     Each problem is tagged with an auto-classified difficulty level
     based on the reference solution complexity.
@@ -216,10 +216,10 @@ def get_mbpp_80_20() -> Tuple[List[Dict], List[Dict]]:
     print("[Data Loader] Loading MBPP 'sanitized' dataset from HuggingFace...")
     dataset = load_dataset("mbpp", "sanitized", split="train")
     
-    # The MBPP 'sanitized' train split has exactly 120 problems.
-    # We will use 100 for training and 20 for evaluation.
-    train_dataset = dataset.select(range(100))
-    eval_dataset = dataset.select(range(100, 120))
+    # The MBPP 'sanitized' train split has 427 problems.
+    # We will use 374 for training and the remaining 53 for evaluation.
+    train_dataset = dataset.select(range(374))
+    eval_dataset = dataset.select(range(374, len(dataset)))
     
     def format_problem(row) -> Dict:
         # Combine the assertions into an executable test script
