@@ -8,7 +8,7 @@ Loads the MBPP sanitized dataset from HuggingFace and provides:
 """
 
 import random
-from datasets import load_dataset
+from datasets import load_dataset, concatenate_datasets
 from typing import List, Dict, Tuple
 
 
@@ -208,18 +208,29 @@ class CurriculumScheduler:
 def get_mbpp_80_20() -> Tuple[List[Dict], List[Dict]]:
     """
     Loads the sanitized MBPP dataset from HuggingFace.
-    Uses 374 problems for training and the remaining 53 for evaluation.
+    Combines train, test, and validation splits (420 total problems),
+    allocating 374 for training and 46 for evaluation.
     
     Each problem is tagged with an auto-classified difficulty level
     based on the reference solution complexity.
     """
     print("[Data Loader] Loading MBPP 'sanitized' dataset from HuggingFace...")
-    dataset = load_dataset("mbpp", "sanitized", split="train")
+    dataset_name = "google-research-datasets/mbpp"
+    try:
+        ds_train = load_dataset(dataset_name, "sanitized", split="train")
+        ds_test = load_dataset(dataset_name, "sanitized", split="test")
+        ds_val = load_dataset(dataset_name, "sanitized", split="validation")
+    except Exception:
+        dataset_name = "mbpp"
+        ds_train = load_dataset(dataset_name, "sanitized", split="train")
+        ds_test = load_dataset(dataset_name, "sanitized", split="test")
+        ds_val = load_dataset(dataset_name, "sanitized", split="validation")
+        
+    full_dataset = concatenate_datasets([ds_train, ds_test, ds_val])
     
-    # The MBPP 'sanitized' train split has 427 problems.
-    # We will use 374 for training and the remaining 53 for evaluation.
-    train_dataset = dataset.select(range(374))
-    eval_dataset = dataset.select(range(374, len(dataset)))
+    # 374 for training, remaining 46 for evaluation
+    train_dataset = full_dataset.select(range(min(374, len(full_dataset))))
+    eval_dataset = full_dataset.select(range(min(374, len(full_dataset)), len(full_dataset)))
     
     def format_problem(row) -> Dict:
         # Combine the assertions into an executable test script
