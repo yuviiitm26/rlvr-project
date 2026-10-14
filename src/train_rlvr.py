@@ -63,16 +63,20 @@ def main():
     # Phase 1 (1-150): Easy only -> Phase 2 (150-400): Easy+Medium -> Phase 3 (400+): All
     scheduler = CurriculumScheduler(train_problems, phase1_end=150, phase2_end=400)
     
+    # Check for --from_scratch flag
+    import sys
+    force_scratch = "--from_scratch" in sys.argv or "--scratch" in sys.argv
+    
     # Kaggle mounts data sources here
     phase4_step50_path = "/kaggle/input/rlvr-project-phase-4/rlvr-project/grpo_checkpoint_step_50"
     phase2_path = "/kaggle/input/rlvr-project-phase-2-unsloth/grpo_saved_lora"
     
     start_step = 0
-    if os.path.exists(phase4_step50_path):
+    if not force_scratch and os.path.exists(phase4_step50_path):
         print(f"[Model] Warm Start: Resuming from Phase 4 Step 50: {phase4_step50_path}...")
         model_to_load = phase4_step50_path
         start_step = 50
-    elif os.path.exists(phase2_path):
+    elif not force_scratch and os.path.exists(phase2_path):
         print(f"[Model] Warm Start: Loading previously trained adapters from {phase2_path}...")
         model_to_load = phase2_path
     else:
@@ -241,7 +245,14 @@ def main():
             trainer.scaler.step(trainer.optimizer)
             trainer.scaler.update()
             
-            print(f"  [GRPO] Loss: {total_loss/trainer.group_size:.4f} | KL: {total_kl/trainer.group_size:.4f}")
+            # Step the learning rate scheduler (Warmup + Cosine Decay)
+            if hasattr(trainer, "scheduler") and trainer.scheduler is not None:
+                trainer.scheduler.step()
+                current_lr = trainer.scheduler.get_last_lr()[0]
+            else:
+                current_lr = trainer.optimizer.param_groups[0]["lr"]
+            
+            print(f"  [GRPO] Loss: {total_loss/trainer.group_size:.4f} | KL: {total_kl/trainer.group_size:.4f} | LR: {current_lr:.2e}")
             
             # --- Aggressive Checkpointing (Kaggle limit protection) ---
             if global_step % 50 == 0:
