@@ -46,5 +46,5 @@ print("Response:", response.text)
 
 if response.status_code == 200:
     data = response.json()
-    print("\n✅ Successfully launched Kaggle Kernel!")
+    print("\n[SUCCESS] Successfully launched Kaggle Kernel!")
     print(f"URL: https://www.kaggle.com/code/yuvrajgosainiitm/rlvr-project-phase-7")
